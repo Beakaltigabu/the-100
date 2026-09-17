@@ -1,0 +1,60 @@
+:root {
+  /* Light theme (default) */
+  --color-ink: #101010;
+  --color-paper: #F5F3EE;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #ECE9E0;
+  --color-accent: #FF4D00;
+  --color-accent-soft: rgba(255, 77, 0, 0.12);
+  --color-muted: #6E6E66;
+  --color-success: #22C55E;
+  --color-warning: #EAB308;
+  --color-danger: #DC2626;
+  --color-line: rgba(16, 16, 16, 0.12);
+
+  --bg: var(--color-paper);
+  --fg: var(--color-ink);
+  --card-bg: var(--color-surface);
+  --card-bg-alt: var(--color-surface-alt);
+  --input-bg: var(--color-surface);
+  --shadow: 0 1px 2px rgba(16, 16, 16, 0.06), 0 8px 24px rgba(16, 16, 16, 0.08);
+
+  --radius: 14px;
+  --radius-sm: 10px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --font-display: 'Montserrat', 'Geist', 'Manrope', 'Noto Sans Ethiopic', system-ui, -apple-system, sans-serif;
+  --font-body: 'Montserrat', 'Noto Sans Ethiopic', system-ui, -apple-system, sans-serif;
+
+  --nav-height: 64px;
+  --max-width: 560px;
+}
+
+[data-theme='dark'] {
+  --color-ink: #F5F3EE;
+  --color-paper: #101010;
+  --color-surface: #1A1A1A;
+  --color-surface-alt: #242424;
+  --color-accent: #FF6B2C;
+  --color-accent-soft: rgba(255, 107, 44, 0.16);
+  --color-muted: #9A9A92;
+  --color-success: #34D399;
+  --color-warning: #FACC15;
+  --color-danger: #F87171;
+  --color-line: rgba(245, 243, 238, 0.14);
+
+  --bg: var(--color-paper);
+  --fg: var(--color-ink);
+  --card-bg: var(--color-surface);
+  --card-bg-alt: var(--color-surface-alt);
+  --input-bg: var(--color-surface-alt);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+}

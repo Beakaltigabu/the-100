@@ -1,0 +1,35 @@
+{
+  "name": "the-100-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "vitest run",
+    "strava:subscribe": "node scripts/strava-subscribe.mjs",
+    "telegram:setwebhook": "node scripts/telegram-setwebhook.mjs",
+    "telegram:webhook:info": "node scripts/telegram-setwebhook.mjs info",
+    "telegram:webhook:remove": "node scripts/telegram-setwebhook.mjs remove",
+    "telegram:setup": "node scripts/telegram-setup.mjs",
+    "loadtest": "node scripts/loadtest.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "compression": "^1.8.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "knex": "^3.1.0",
+    "mysql2": "^3.11.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "autocannon": "^8.0.0",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,61 @@
+.oauth {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.oauth__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: var(--space-1) 0;
+}
+
+.oauth__divider::before,
+.oauth__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-line);
+}
+
+.oauth__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--fg);
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.oauth__btn:hover {
+  border-color: var(--color-muted);
+  background: var(--card-bg-alt);
+}
+
+.oauth__mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.oauth__mark--google {
+  background: #4285f4;
+}

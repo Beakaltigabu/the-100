@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+dist/
+dist-ssr/
+dev-dist/
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Env (keep real secrets out of git)
+server/.env
+db/.env
+server/.env.dev.bak
+**/.env.local
+
+# Deployment artifacts (can contain secrets + vendored deps)
+*.zip
+
+# Test coverage
+coverage/

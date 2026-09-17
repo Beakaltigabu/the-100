@@ -1,0 +1,94 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: transform 0.08s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: var(--color-accent);
+  color: #ffffff;
+  border-color: var(--color-accent);
+}
+
+.btn--primary:hover {
+  filter: brightness(1.06);
+}
+
+.btn--secondary {
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--color-line);
+}
+
+.btn--secondary:hover {
+  border-color: var(--color-muted);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--fg);
+}
+
+.btn--ghost:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.btn--dark {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.btn--danger {
+  background: transparent;
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.btn--sm {
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.75rem;
+}
+
+.btn--md {
+  padding: var(--space-3) var(--space-5);
+  font-size: 0.85rem;
+}
+
+.btn--lg {
+  padding: var(--space-4) var(--space-6);
+  font-size: 1rem;
+}
+
+.btn--full {
+  width: 100%;
+}
+
+.btn--submit.is-busy {
+  cursor: progress;
+}
+
+.btn--submit.is-done {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #ffffff;
+  animation: auth-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}

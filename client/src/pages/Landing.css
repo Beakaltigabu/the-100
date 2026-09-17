@@ -1,0 +1,426 @@
+.landing {
+  flex: 1;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* ── Hero ─────────────────────────────────────────── */
+.hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 82vh;
+  padding: var(--space-7) var(--space-4);
+  gap: var(--space-4);
+  overflow: hidden;
+}
+
+.hero__watermark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(14rem, 46vw, 30rem);
+  line-height: 1;
+  color: var(--color-accent);
+  opacity: 0.05;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  letter-spacing: -0.05em;
+}
+
+.hero__kicker {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  opacity: 0;
+  animation: fade-up 0.6s ease 0.05s forwards;
+}
+
+.hero__manifesto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.hero__manifesto-line {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2rem, 8vw, 4.5rem);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  opacity: 0;
+  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.hero__manifesto-line:nth-child(1) {
+  animation-delay: 0.15s;
+}
+
+.hero__manifesto-line--accent {
+  color: var(--color-accent);
+  animation-delay: 0.3s;
+}
+
+.hero__support {
+  font-size: 1.05rem;
+  color: var(--color-muted);
+  max-width: 420px;
+  opacity: 0;
+  animation: fade-up 0.7s ease 0.5s forwards;
+}
+
+.hero__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 320px;
+  margin-top: var(--space-4);
+  opacity: 0;
+  animation: fade-up 0.7s ease 0.65s forwards;
+}
+
+.hero__link {
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+  transition: color 0.15s ease;
+}
+
+.hero__link:hover {
+  color: var(--color-accent);
+}
+
+/* ── Begins (countdown) ───────────────────────────── */
+.begins {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+  padding: var(--space-7) var(--space-5);
+  background: var(--color-accent-soft);
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.begins__kicker {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.begins__date {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(1.2rem, 4vw, 1.6rem);
+}
+
+/* ── Movement (letter manifesto) ──────────────────── */
+.movement {
+  padding: var(--space-8) var(--space-5);
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.movement__kicker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: var(--space-6);
+}
+
+.movement__letter {
+  font-size: clamp(1.1rem, 2.6vw, 1.35rem);
+  line-height: 1.7;
+  color: var(--fg);
+  max-width: 640px;
+  margin: 0 auto;
+  letter-spacing: -0.01em;
+}
+
+.movement__signoff {
+  margin-top: var(--space-6);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
+/* ── Founder ──────────────────────────────────────── */
+.founder {
+  padding: var(--space-8) var(--space-5);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  text-align: center;
+}
+
+[data-theme='dark'] .founder {
+  background: var(--color-surface-alt);
+}
+
+.founder__title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: var(--space-5);
+}
+
+.founder__line {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2rem, 8vw, 3.5rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.founder__line--dim {
+  color: var(--color-muted);
+}
+
+.founder__sub {
+  margin-top: var(--space-5);
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+  color: rgba(245, 243, 238, 0.7);
+}
+
+/* ── How it works — timeline ──────────────────────── */
+.how {
+  padding: var(--space-8) var(--space-5);
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+.how__kicker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: var(--space-2);
+}
+
+.how__title {
+  font-size: 1.8rem;
+  margin-bottom: var(--space-6);
+}
+
+.timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline__step {
+  position: relative;
+  display: flex;
+  gap: var(--space-4);
+  padding-bottom: var(--space-6);
+}
+
+.timeline__step:last-child {
+  padding-bottom: 0;
+}
+
+.timeline__rail {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  width: 44px;
+}
+
+.timeline__rail::after {
+  content: '';
+  position: absolute;
+  top: 44px;
+  bottom: -6px;
+  width: 2px;
+  background: var(--color-line);
+}
+
+.timeline__step:last-child .timeline__rail::after {
+  display: none;
+}
+
+.timeline__node {
+  position: relative;
+  z-index: 1;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--card-bg);
+  border: 2px solid var(--color-line);
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.05rem;
+  transition: border-color 0.25s ease, background 0.25s ease, color 0.25s ease, transform 0.25s ease;
+}
+
+.timeline__step:hover .timeline__node {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+  transform: scale(1.05);
+}
+
+.timeline__content {
+  flex: 1;
+  padding-top: 6px;
+}
+
+.timeline__content h3 {
+  font-size: 1.15rem;
+  margin-bottom: var(--space-1);
+}
+
+.timeline__content p {
+  font-size: 0.95rem;
+  max-width: 46ch;
+}
+
+/* ── CTA ──────────────────────────────────────────── */
+.cta {
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.cta__title {
+  font-size: clamp(1.8rem, 7vw, 2.6rem);
+}
+
+/* ── Reveal on scroll ─────────────────────────────── */
+.movement,
+.founder,
+.how,
+.cta {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.movement.is-visible,
+.founder.is-visible,
+.how.is-visible,
+.cta.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.how.is-visible .timeline__step {
+  animation: fade-up 0.6s ease backwards;
+}
+
+/* ── Keyframes ────────────────────────────────────── */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Reduced motion ───────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .hero__kicker,
+  .hero__manifesto-line,
+  .hero__support,
+  .hero__actions,
+  .movement,
+  .founder,
+  .how,
+  .cta,
+  .how.is-visible .timeline__step {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+
+  .timeline__node {
+    transition: none;
+  }
+}
+
+/* ── Small screens ────────────────────────────────── */
+@media (max-width: 480px) {
+  .hero {
+    min-height: 74vh;
+    padding: var(--space-6) var(--space-3);
+    gap: var(--space-3);
+  }
+
+  .hero__watermark {
+    font-size: clamp(9rem, 50vw, 16rem);
+  }
+
+  .hero__manifesto-line {
+    font-size: clamp(1.8rem, 10vw, 2.6rem);
+  }
+
+  .begins,
+  .movement,
+  .founder,
+  .how,
+  .cta {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .movement,
+  .founder,
+  .how {
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-6);
+  }
+
+  .timeline__step {
+    gap: var(--space-3);
+  }
+
+  .timeline__rail {
+    width: 36px;
+  }
+
+  .timeline__node {
+    width: 36px;
+    height: 36px;
+    font-size: 0.95rem;
+  }
+}

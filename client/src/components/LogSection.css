@@ -1,0 +1,112 @@
+.log-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+}
+
+.log-section__title {
+  font-size: 1.3rem;
+}
+
+.log-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--card-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.log-section__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.log-section__row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--space-3);
+}
+
+@media (max-width: 420px) {
+  .log-section__row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.log-section__recent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.log-section__sub {
+  font-size: 1.05rem;
+}
+
+.log-section__day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.log-section__day-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--color-muted);
+}
+
+/* Field styles (self-contained) */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field__label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+.field__input {
+  padding: var(--space-3) var(--space-3);
+  background: var(--input-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  outline: none;
+}
+
+.field__input:focus {
+  border-color: var(--color-accent);
+}
+
+.field__input::placeholder {
+  color: var(--color-muted);
+  opacity: 0.7;
+}
+
+/* Chips */
+.chip {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line);
+  background: var(--input-bg);
+  color: var(--fg);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.chip.is-selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}

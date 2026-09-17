@@ -1,0 +1,229 @@
+.auth-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: var(--card-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  padding: var(--space-6);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.auth-card > * {
+  animation: auth-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.auth-card > :nth-child(1) {
+  animation-delay: 0.04s;
+}
+.auth-card > :nth-child(2) {
+  animation-delay: 0.08s;
+}
+.auth-card > :nth-child(3) {
+  animation-delay: 0.12s;
+}
+.auth-card > :nth-child(4) {
+  animation-delay: 0.16s;
+}
+.auth-card > :nth-child(5) {
+  animation-delay: 0.2s;
+}
+.auth-card > :nth-child(6) {
+  animation-delay: 0.24s;
+}
+.auth-card > :nth-child(7) {
+  animation-delay: 0.28s;
+}
+.auth-card > :nth-child(8) {
+  animation-delay: 0.32s;
+}
+
+.auth-card__error {
+  color: var(--color-danger);
+  font-size: 0.85rem;
+  animation: auth-shake 0.32s ease;
+}
+
+.auth-card__switch {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.auth-card__note {
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.auth-card__switch a {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.auth-card__link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.auth-card__link:hover {
+  opacity: 0.75;
+}
+
+.auth-card__forgot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg-alt);
+  animation: auth-slide-down 0.3s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.auth-card__success {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  animation: auth-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.auth-card__success-mark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-success);
+  color: #ffffff;
+  animation: auth-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Field primitives (shared by TextField + PasswordField) */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field__label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+.field__input {
+  padding: var(--space-3);
+  background: var(--input-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field__input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.field__input--invalid {
+  border-color: var(--color-danger);
+}
+
+.field__hint {
+  font-size: 0.75rem;
+  color: var(--color-danger);
+}
+
+.field__input::placeholder {
+  color: var(--color-muted);
+  opacity: 0.7;
+}
+
+/* Animations */
+@keyframes auth-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes auth-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes auth-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes auth-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes auth-pop {
+  0% {
+    transform: scale(0.96);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-card > *,
+  .auth-card__error,
+  .auth-card__forgot,
+  .btn--submit.is-done {
+    animation: none !important;
+  }
+}

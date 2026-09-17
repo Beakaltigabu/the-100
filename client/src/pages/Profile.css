@@ -1,0 +1,134 @@
+.profile__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.profile__avatar {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: var(--color-accent);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.5rem;
+  border-radius: 50%;
+}
+
+@media (max-width: 400px) {
+  .profile__avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 1.25rem;
+  }
+}
+
+.profile__meta {
+  flex: 1;
+}
+
+.profile__name {
+  font-size: 1.4rem;
+}
+
+.profile__sub {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--color-accent);
+  text-transform: uppercase;
+}
+
+.profile__edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--card-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-4);
+}
+
+.profile__challenge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--card-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: var(--space-6);
+}
+
+.profile__goal {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.profile__goal-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--color-muted);
+  text-transform: uppercase;
+}
+
+.profile__goal-value {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.6rem;
+}
+
+.profile__progress {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.profile__status {
+  display: flex;
+}
+
+.profile__section {
+  font-size: 1.1rem;
+}
+
+.profile__integration {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--card-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+}
+
+.profile__integration-note {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.profile__danger {
+  margin-top: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.profile__delete-error {
+  color: var(--color-danger);
+  font-size: 0.85rem;
+}

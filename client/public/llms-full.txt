@@ -1,0 +1,78 @@
+# THE 100 — Full content
+
+THE 100 is a free 100-day personal movement challenge. Choose your goal — running, walking, run + walk, or cycling — commit for 100 days, and finish what you started. It is bilingual (English and Amharic / አማርኛ), with a private community, automatic Strava sync, and a Telegram bot for check-ins and notifications.
+
+Website: https://chooseyour100.com
+Current challenge: September 23, 2026 – December 31, 2026 (100 days)
+
+## The Manifesto
+
+THE 100 isn't about being the fastest, the strongest, or doing the most. It's about choosing something that matters to you — and giving 100% of yourself to it for 100 days.
+
+We all start somewhere different. Your distance is yours. Your journey is yours. Some days will be easy. Some days, showing up will be the hardest part. Both count.
+
+Because the real challenge isn't the distance. It's giving your best, keeping your word, and becoming someone you're proud of. We move individually, but we don't move alone.
+
+100 days. One commitment. Thousands of journeys.
+
+Start where you are. Give 100%. Show up.
+
+## How it works
+
+1. Join THE 100 — Create your free account in under a minute.
+2. Your starting point — Choose your activity (running, walking, run + walk, or cycling) and how much you do each week.
+3. Choose your goal — Pick a distance you can commit to, recommended for your level, or set your own. Your goal is personal, not a comparison.
+4. Commit for 100 days — Confirm your goal and your 100 days begin. Consistency beats intensity — you don't need perfect days, just repeated ones.
+5. Log and hit milestones — Record each run, walk, or ride manually or automatically via Strava. Milestones (10, 50, 100 km…) mark the way.
+6. Community and finish — Join the private community for accountability. On day 100 you'll have finished what you started — and that's the point.
+
+## Start where you are
+
+Choose a starting point that fits you: THE BEGINNING, THE BUILD, THE CHALLENGE — from 20 km to 1,000+ km. Different distances. Same commitment. These are not rankings.
+
+## Milestones
+
+Every kilometer counts. One step. One activity. One milestone at a time.
+
+## The Founder Challenge
+
+The founder is doing 1,000 km. You don't have to. Every participant chooses their own goal. Start from where you are. Finish what you started.
+
+## Frequently asked questions
+
+### What is THE 100?
+THE 100 is a free 100-day personal movement challenge. You choose a goal — running, walking, run + walk, or cycling — commit for 100 days, and log your progress. The only person you're racing is the person you were 100 days ago.
+
+### How does the 100-day challenge work?
+Create a free account, choose your activity and how much you do each week, pick a goal we recommend (or set your own), and commit. Log each run, walk, or ride manually or automatically via Strava, and milestones mark your progress toward day 100.
+
+### Is THE 100 free?
+Yes. Creating an account, choosing your goal, logging activities, and joining the community are completely free.
+
+### What activities count toward the challenge?
+Running, walking, run + walk, and cycling. You can log each activity manually in the app or by Telegram, or connect Strava to sync automatically.
+
+### Do I need to be fit to join?
+No. You choose your own goal starting from where you are. A beginner finishing 50 km and a runner finishing 1,000 km are equally successful because you only compete with the person you were 100 days ago.
+
+### When does the challenge start and how long is it?
+THE 100 runs for 100 days. The current challenge starts on September 23, 2026 and ends on December 31, 2026.
+
+### How do I track my progress?
+Log each activity in the app, send /checkin to the THE 100 Telegram bot, or sync Strava automatically. You can see your day number, total distance, milestones, and streaks in the app.
+
+### Is THE 100 available in Amharic?
+Yes. The app and the Telegram bot are fully bilingual in English and Amharic (አማርኛ). You can switch languages any time in the app.
+
+## Telegram bot (@the100days_bot)
+
+- Link your account with a one-tap deep link from the app, then use: /status, /checkin <distance>, /day, /goal, /streaks, /language en|am, /help, /disconnect.
+- The bot sends inactivity nudges, weekly recaps, milestone and finish celebrations, and a daily community digest.
+- Example: /checkin 8.4 logs an 8.4 km activity.
+
+## Support and privacy
+
+- Support: https://chooseyour100.com/support
+- Privacy and terms: https://chooseyour100.com/privacy
+- Telegram bot: https://t.me/the100days_bot
+- Community group: https://t.me/+pOsJz7n6qEQzMWY8

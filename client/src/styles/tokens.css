@@ -32,6 +32,7 @@
   --space-8: 64px;
 
   --font-display: 'Montserrat', 'Geist', 'Manrope', 'Noto Sans Ethiopic', system-ui, -apple-system, sans-serif;
+  --font-display-condensed: 'Anton', 'Montserrat', 'Noto Sans Ethiopic', system-ui, -apple-system, sans-serif;
   --font-body: 'Montserrat', 'Noto Sans Ethiopic', system-ui, -apple-system, sans-serif;
 
   --nav-height: 64px;

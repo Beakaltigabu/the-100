@@ -1,5 +1,6 @@
 .ob {
   max-width: 520px;
+  overflow-x: clip;
 }
 
 /* Progress + stage labels */
@@ -284,7 +285,31 @@
   border-color: var(--color-accent);
 }
 
+.field__input--invalid {
+  border-color: var(--color-danger);
+}
+
+.field__hint {
+  font-size: 0.75rem;
+  color: var(--color-danger);
+}
+
 .field__input::placeholder {
   color: var(--color-muted);
   opacity: 0.7;
+}
+
+.ob-auth .auth-terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+
+.ob-auth .auth-terms input {
+  margin-top: 2px;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
 }

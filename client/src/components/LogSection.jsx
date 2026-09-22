@@ -5,14 +5,12 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import Button from './Button';
 import ActivityRow from './ActivityRow';
-import { ACTIVITY_KEYS, unitKey } from '../lib/activity';
+import { ACTIVITY_KEYS, activityLabelKey, unitKey } from '../lib/activity';
+import { todayISO } from '../lib/time';
 import './LogSection.css';
 
 function todayInput() {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
+  return todayISO();
 }
 
 function dayLabel(dateISO) {
@@ -52,7 +50,10 @@ export default function LogSection({ onLogged }) {
   const submit = async (e) => {
     e.preventDefault();
     const quantity = parseFloat(form.quantity);
-    if (!quantity || quantity <= 0) return;
+    if (!quantity || quantity <= 0) {
+      showToast(t('invalidQuantity'), 'error');
+      return;
+    }
     setBusy(true);
     try {
       const res = await api.post('/api/activities/manual', {
@@ -123,7 +124,7 @@ export default function LogSection({ onLogged }) {
                 className={`chip ${form.activity_type === k ? 'is-selected' : ''}`.trim()}
                 onClick={() => setForm({ ...form, activity_type: k })}
               >
-                {t(k)}
+                {t(activityLabelKey(k))}
               </button>
             ))}
           </div>

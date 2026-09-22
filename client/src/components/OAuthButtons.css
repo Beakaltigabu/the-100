@@ -51,11 +51,8 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  color: #fff;
-  font-weight: 800;
-  font-size: 0.8rem;
 }
 
 .oauth__mark--google {
-  background: #4285f4;
+  background: transparent;
 }

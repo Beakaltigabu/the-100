@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const z = require('zod');
 const db = require('../db');
 const config = require('../config');
-const { requireAuth, signToken, verifyToken, setAuthCookie, clearAuthCookie } = require('../middleware/auth');
+const { requireAuth, signToken, signSessionToken, verifyToken, setAuthCookie, clearAuthCookie } = require('../middleware/auth');
 const { asyncHandler, AppError } = require('../middleware/errors');
 const { createNotification } = require('../services/notifications');
 const googleAuth = require('../services/googleAuth');
@@ -15,6 +15,10 @@ const telegramMessenger = require('../services/telegramMessenger');
 const botMessages = require('../services/botMessages');
 
 const router = express.Router();
+
+// Precomputed bcrypt hash of a random throwaway password — used to equalize
+// login timing for unknown/passwordless accounts (prevents user enumeration).
+const DUMMY_PASSWORD_HASH = '$2b$12$eiuZFOuuH1TzWS5bjCXCxejYdMVgCAkNTBvG2qnc/qlgHmJ1bFAE.';
 
 const passwordSchema = z
   .string()
@@ -56,14 +60,14 @@ router.post(
       throw new AppError('An account with this email already exists', 409);
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     const [id] = await db('users').insert({
       name: cleanName,
       email,
       password_hash: passwordHash
     });
 
-    const token = signToken({ sub: id });
+    const token = signSessionToken({ id, token_version: 0 });
     setAuthCookie(res, token);
     await createNotification({
       userId: id,
@@ -91,21 +95,20 @@ router.post(
     }
 
     const user = await db('users').where({ email }).first();
-    if (!user || !user.password_hash) {
-      recordFailure(req.ip, email);
-      throw new AppError(
-        user && !user.password_hash ? 'This account uses Google sign-in.' : 'Invalid email or password',
-        401
-      );
-    }
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) {
+    // Always run a bcrypt.compare (against a dummy hash when the account is
+    // missing or passwordless) so response timing doesn't reveal which
+    // emails are registered, and always return the same generic message.
+    const ok = await bcrypt.compare(
+      password,
+      user && user.password_hash ? user.password_hash : DUMMY_PASSWORD_HASH
+    );
+    if (!user || !user.password_hash || !ok) {
       recordFailure(req.ip, email);
       throw new AppError('Invalid email or password', 401);
     }
 
     clear(req.ip, email);
-    const token = signToken({ sub: user.id });
+    const token = signSessionToken(user);
     setAuthCookie(res, token);
     res.json({ message: 'Logged in' });
   })
@@ -152,7 +155,7 @@ router.post(
       throw new AppError('Invalid reset request', 400, parsed.error.flatten());
     }
     const { token, password } = parsed.data;
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     const userId = await passwordReset.resetPasswordWithToken(token, passwordHash);
     if (!userId) {
       throw new AppError('This reset link is invalid or expired.', 400);
@@ -170,7 +173,14 @@ router.get(
     if (!googleAuth.configured()) {
       throw new AppError('Google sign-in is not configured', 503);
     }
-    const state = signToken({ purpose: 'google_auth', returnTo: sanitizeReturn(req.query.returnTo) });
+    // mode tells the callback whether this is a login or a registration.
+    // A login for an email with no account must NOT auto-create — it routes
+    // to /register with an inline message instead.
+    const mode = req.query.mode === 'register' ? 'register' : 'login';
+    const state = signToken(
+      { purpose: 'google_auth', mode, returnTo: sanitizeReturn(req.query.returnTo) },
+      { expiresIn: '10m' }
+    );
     res.redirect(googleAuth.authorizeUrl(state));
   })
 );
@@ -202,9 +212,19 @@ router.get(
     if (!email) {
       throw new AppError('Google did not return an email', 400);
     }
+    // Never link/create accounts from an unverified Google email claim.
+    if (info.email_verified !== true) {
+      throw new AppError('Google email address is not verified', 400);
+    }
 
     let user = await db('users').where({ email }).first();
     if (!user) {
+      // Login mode must not create an account (also prevents re-login after
+      // account deletion). Send them to register with an inline message.
+      if (payload.mode !== 'register') {
+        clearAuthCookie(res);
+        return res.redirect(`${config.clientOrigin}/register?google_no_account=1`);
+      }
       const [id] = await db('users').insert({
         name: info.name || email.split('@')[0],
         email,
@@ -221,7 +241,7 @@ router.get(
       await db('users').where({ id: user.id }).update(updates);
     }
 
-    const token = signToken({ sub: user.id });
+    const token = signSessionToken(user);
     setAuthCookie(res, token);
     res.redirect(`${config.clientOrigin}${payload.returnTo || '/dashboard'}`);
   })
@@ -231,6 +251,13 @@ const meHandler = [
   requireAuth,
   asyncHandler(async (req, res) => {
     const user = req.user;
+    // Whether the member has committed to the active challenge (no enrollment
+    // => they must go through onboarding before using the dashboard/community).
+    const enrollment = await db('enrollments')
+      .join('challenges', 'challenges.id', 'enrollments.challenge_id')
+      .where({ 'enrollments.user_id': user.id, 'challenges.is_active': true })
+      .select('enrollments.id')
+      .first();
     res.json({
       id: user.id,
       name: user.name,
@@ -249,6 +276,7 @@ const meHandler = [
       onboardingComplete: !!user.onboarding_complete,
       emailVerified: !!user.email_verified,
       hasGoogle: !!user.google_id,
+      hasEnrollment: !!enrollment,
       language: user.language || 'en',
       isAdmin: req.isAdmin
     });

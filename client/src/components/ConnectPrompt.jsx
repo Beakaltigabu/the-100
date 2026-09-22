@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../components/Toast';
 import Modal from './Modal';
 import Button from './Button';
+import { openSafeUrl } from '../lib/url';
 import './ConnectPrompt.css';
 
 export default function ConnectPrompt({ open, onClose }) {
@@ -47,7 +49,7 @@ export default function ConnectPrompt({ open, onClose }) {
   const connectTelegram = () => {
     api
       .get('/api/integrations/telegram/connect')
-      .then((d) => window.open(d.deepLink, '_blank'))
+      .then((d) => openSafeUrl(d.deepLink))
       .catch((err) => showToast(err.status === 503 ? t('telegramNotConfigured') : err.message, 'error'));
   };
 
@@ -97,6 +99,11 @@ export default function ConnectPrompt({ open, onClose }) {
       </div>
 
       <p className="connect-prompt__note">{t('connectPromptNote')}</p>
+      <p className="connect-prompt__note">
+        <Link to="/support" className="connect-prompt__link">
+          {t('dataUsageLink')}
+        </Link>
+      </p>
     </Modal>
   );
 }

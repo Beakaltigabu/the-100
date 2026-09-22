@@ -18,12 +18,23 @@ Thumbs.db
 
 # Env (keep real secrets out of git)
 server/.env
+server/.env.production
+server/.env.prod
+client/.env
 db/.env
 server/.env.dev.bak
 **/.env.local
+**/.env.production
+**/.env.production.local
 
 # Deployment artifacts (can contain secrets + vendored deps)
 *.zip
 
 # Test coverage
 coverage/
+
+# Screenshots / design artifacts (not code, may contain user data)
+ScreenShoots/
+
+# Throwaway dev/debug scripts (may reference local env values)
+server/scripts/smoke-enroll.cjs

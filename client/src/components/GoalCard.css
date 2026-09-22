@@ -8,6 +8,7 @@
   background: var(--card-bg);
   border: 2px solid var(--color-line);
   border-radius: var(--radius);
+  color: var(--fg);
   text-align: left;
   transition: border-color 0.15s ease, transform 0.08s ease;
 }

@@ -3,9 +3,9 @@ const bcrypt = require('bcryptjs');
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL || 'admin@the100.app';
 const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'Admin123!';
 
-// THE 100 launches September 21, 2026 and runs for 100 days.
-const CHALLENGE_START = '2026-09-21';
-const CHALLENGE_END = '2026-12-29';
+// THE 100 launches September 23, 2026 and runs for 100 days.
+const CHALLENGE_START = '2026-09-23';
+const CHALLENGE_END = '2026-12-31';
 
 function addDaysISO(iso, days) {
   const d = new Date(iso + 'T00:00:00Z');

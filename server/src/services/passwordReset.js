@@ -5,6 +5,11 @@ const RESET_TTL_MS = 15 * 60 * 1000;
 
 async function createResetToken(userId) {
   const token = generateToken(32);
+  // Only one live reset link per user: burn any outstanding tokens first.
+  await db('password_reset_tokens')
+    .where({ user_id: userId })
+    .whereNull('used_at')
+    .update({ used_at: db.fn.now() });
   await db('password_reset_tokens').insert({
     user_id: userId,
     token_hash: hashToken(token),
@@ -31,7 +36,10 @@ async function resetPasswordWithToken(token, passwordHash) {
     if (!row) return null;
     if (row.used_at) return null;
     if (new Date(row.expires_at).getTime() < Date.now()) return null;
-    await trx('users').where({ id: row.user_id }).update({ password_hash: passwordHash, updated_at: trx.fn.now() });
+    // Bump token_version so every session issued before the reset dies.
+    await trx('users')
+      .where({ id: row.user_id })
+      .update({ password_hash: passwordHash, token_version: trx.raw('token_version + 1'), updated_at: trx.fn.now() });
     await trx('password_reset_tokens').where({ id: row.id }).update({ used_at: trx.fn.now() });
     return row.user_id;
   });

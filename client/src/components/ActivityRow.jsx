@@ -1,5 +1,6 @@
 import './ActivityRow.css';
 import { useLanguage } from '../context/LanguageContext';
+import { activityLabelKey } from '../lib/activity';
 
 export default function ActivityRow({ activity, unit = 'km', onDelete }) {
   const { t } = useLanguage();
@@ -10,7 +11,7 @@ export default function ActivityRow({ activity, unit = 'km', onDelete }) {
           {Number(activity.quantity ?? activity.distance)} {t(unit)}
         </div>
         <div className="activity-row__type">
-          {t(activity.activity_type)} · {t(activity.source)}
+          {t(activityLabelKey(activity.activity_type))} · {activity.source}
         </div>
       </div>
       {activity.source === 'manual' && onDelete ? (

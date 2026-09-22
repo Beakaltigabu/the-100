@@ -3,14 +3,17 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { usePageMeta } from '../hooks/usePageMeta';
 import { useToast } from '../components/Toast';
 import AuthShell from '../components/AuthShell';
 import PasswordField from '../components/PasswordField';
 import SubmitButton from '../components/SubmitButton';
 import { passwordStrength } from '../lib/password';
+import { passwordIssues, authErrorMessage } from '../lib/validation';
 import './Auth.css';
 
 export default function ResetPassword() {
+  usePageMeta({ title: 'Reset password', path: '/reset-password', index: false });
   const { t } = useLanguage();
   const { showToast } = useToast();
   const { logout } = useAuth();
@@ -24,8 +27,8 @@ export default function ResetPassword() {
   const [error, setError] = useState('');
 
   const strength = passwordStrength(password);
-  const valid =
-    password.length >= 10 && password === confirm && /[A-Za-z]/.test(password) && /[0-9]/.test(password);
+  const pwdIssues = password ? passwordIssues(password) : [];
+  const valid = pwdIssues.length === 0 && password === confirm;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -44,7 +47,7 @@ export default function ResetPassword() {
         navigate('/login');
       }, 1100);
     } catch (err) {
-      setError(err.message || t('resetFailed'));
+      setError(authErrorMessage(err, t));
       setBusy(false);
     }
   };
@@ -66,6 +69,7 @@ export default function ResetPassword() {
           showStrength
           strength={strength}
         />
+        {password && pwdIssues.length ? <span className="field__hint">{t(pwdIssues[0])}</span> : null}
 
         <PasswordField
           label={t('confirmPassword')}

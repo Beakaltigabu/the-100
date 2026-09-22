@@ -1,11 +1,18 @@
 import './States.css';
 import { useLanguage } from '../context/LanguageContext';
 
+// On-brand loading state: THE 100 wordmark over a 100-segment progress ring.
 export function LoadingState({ label }) {
   const { t } = useLanguage();
   return (
-    <div className="state">
-      <div className="state__spinner" />
+    <div className="state state--branded" role="status" aria-live="polite">
+      <span className="state__ghost" aria-hidden="true">
+        100
+      </span>
+      <p className="state__brand">
+        THE <span className="state__slash">/</span> 100
+      </p>
+      <div className="state__ring" aria-hidden="true" />
       <p className="state__label">{label || t('loading')}</p>
     </div>
   );

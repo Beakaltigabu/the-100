@@ -66,6 +66,8 @@ if (config.env === 'production') {
   if (problems.length) {
     throw new Error(`Invalid production configuration: ${problems.join('; ')}`);
   }
+} else if (config.jwt.secret === 'insecure-dev-secret') {
+  console.warn('[warn] JWT_SECRET is not set — using the INSECURE dev default. Never run this in production.');
 }
 
 module.exports = config;

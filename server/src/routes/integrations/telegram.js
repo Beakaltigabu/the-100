@@ -3,6 +3,7 @@ const db = require('../../db');
 const config = require('../../config');
 const { requireAuth } = require('../../middleware/auth');
 const { asyncHandler, AppError } = require('../../middleware/errors');
+const { connectLimiter } = require('../../middleware/rateLimit');
 const { generateToken, hashToken } = require('../../lib/tokens');
 
 const router = express.Router();
@@ -33,6 +34,7 @@ router.get(
 
 router.get(
   '/connect',
+  connectLimiter,
   asyncHandler(async (req, res) => {
     if (!configured()) {
       throw new AppError('Telegram integration is not configured', 503);
@@ -65,6 +67,24 @@ router.get(
       groupLink: config.telegram.groupLink || null,
       expiresAt: expiresAt.toISOString()
     });
+  })
+);
+
+// Unlink Telegram without deleting the account (the only previous path was full
+// account deletion). Sets state to `left` and clears the Telegram user id.
+router.post(
+  '/disconnect',
+  asyncHandler(async (req, res) => {
+    await db('telegram_connections')
+      .where({ user_id: req.user.id })
+      .update({
+        state: 'left',
+        telegram_user_id: null,
+        link_token_hash: null,
+        link_expires_at: null,
+        updated_at: db.fn.now()
+      });
+    res.json({ connected: false, state: 'left' });
   })
 );
 

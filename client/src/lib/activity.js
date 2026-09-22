@@ -12,6 +12,12 @@ export const ACTIVITY_SUBTITLE_KEYS = {
 
 export const DISTANCE_ACTIVITIES = ['running', 'walking', 'run_walk', 'cycling', 'swimming'];
 
+// Maps an activity type key to its translation key for the display label.
+// run_walk is stored snake_case but translated as "runWalk".
+export function activityLabelKey(activityType) {
+  return activityType === 'run_walk' ? 'runWalk' : activityType;
+}
+
 export function unitKey() {
   return 'km';
 }

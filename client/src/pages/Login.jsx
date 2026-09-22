@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { usePageMeta } from '../hooks/usePageMeta';
 import { useToast } from '../components/Toast';
 import AuthShell from '../components/AuthShell';
 import TextField from '../components/TextField';
@@ -13,6 +14,7 @@ import './Auth.css';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Login() {
+  usePageMeta({ title: 'Log in', path: '/login', index: false });
   const { login } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
@@ -20,6 +22,7 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   const emailOk = EMAIL_RE.test(form.email);
   const valid = emailOk && form.password.length >= 1;
@@ -27,11 +30,13 @@ export default function Login() {
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    setAttempted(true);
+    if (!emailOk || !form.password) return;
     setBusy(true);
     try {
-      await login(form);
+      const me = await login(form);
       showToast(t('loginSuccess'), 'success');
-      navigate('/dashboard');
+      navigate(me && !me.hasEnrollment ? '/onboarding' : '/dashboard');
     } catch (err) {
       setError(err.message || t('invalidCredentials'));
     } finally {
@@ -39,9 +44,17 @@ export default function Login() {
     }
   };
 
+  const emailHint = attempted && !form.email ? t('emailRequired') : form.email && !emailOk ? t('validEmailRequired') : null;
+
   return (
     <div className="auth-page">
-      <AuthShell kicker={t('brand')} title={t('welcomeBack')} subtitle={t('loginSub')} onSubmit={submit}>
+      <AuthShell
+        kicker={t('authWelcomeBack')}
+        title={t('authLoginTitle')}
+        subtitle={t('authLoginSub')}
+        switchTo="register"
+        onSubmit={submit}
+      >
         <TextField
           label={t('email')}
           icon="mail"
@@ -50,8 +63,8 @@ export default function Login() {
           onChange={(e) => setForm({ ...form, email: e.target.value })}
           placeholder={t('emailPlaceholder')}
           autoComplete="email"
-          invalid={form.email && !emailOk}
-          hint={form.email && !emailOk ? t('validEmailRequired') : null}
+          invalid={(attempted || form.email) && !emailOk}
+          hint={emailHint}
         />
 
         <PasswordField
@@ -59,7 +72,9 @@ export default function Login() {
           value={form.password}
           onChange={(e) => setForm({ ...form, password: e.target.value })}
           autoComplete="current-password"
+          invalid={attempted && !form.password}
         />
+        {attempted && !form.password ? <span className="field__hint">{t('passwordRequired')}</span> : null}
 
         <Link to="/forgot-password" className="auth-card__link">
           {t('forgotPassword')}
@@ -71,11 +86,7 @@ export default function Login() {
           {t('login')}
         </SubmitButton>
 
-        <OAuthButtons />
-
-        <p className="auth-card__switch">
-          {t('needAccount')} <Link to="/register">{t('register')}</Link>
-        </p>
+        <OAuthButtons mode="login" />
       </AuthShell>
     </div>
   );

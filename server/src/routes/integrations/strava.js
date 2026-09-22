@@ -3,9 +3,10 @@ const db = require('../../db');
 const config = require('../../config');
 const { requireAuth, verifyToken, signToken } = require('../../middleware/auth');
 const { asyncHandler, AppError } = require('../../middleware/errors');
+const { connectLimiter } = require('../../middleware/rateLimit');
 const strava = require('../../services/strava');
 const { decrypt } = require('../../lib/crypto');
-const { getValidAccessToken, backfillRecent } = require('../../services/stravaSync');
+const { getValidAccessToken, backfillRecent, syncStrava } = require('../../services/stravaSync');
 
 const router = express.Router();
 
@@ -35,25 +36,31 @@ router.get(
       connected: true,
       athleteId: conn.strava_athlete_id,
       scope: conn.scope,
-      connectedAt: conn.connected_at
+      connectedAt: conn.connected_at,
+      lastSyncedAt: conn.last_synced_at
     });
   })
 );
 
 router.get(
   '/connect',
+  connectLimiter,
   requireAuth,
   asyncHandler(async (req, res) => {
     if (!strava.configured()) {
       throw new AppError('Strava integration is not configured', 503);
     }
-    const state = signToken({ sub: req.user.id, purpose: 'strava_oauth', returnTo: sanitizeReturn(req.query.returnTo) });
+    const state = signToken(
+      { sub: req.user.id, purpose: 'strava_oauth', returnTo: sanitizeReturn(req.query.returnTo) },
+      { expiresIn: '10m' }
+    );
     res.json({ url: strava.authorizeUrl(state) });
   })
 );
 
 router.get(
   '/callback',
+  connectLimiter,
   asyncHandler(async (req, res) => {
     const { code, state, error } = req.query;
     if (error) {
@@ -65,6 +72,9 @@ router.get(
     let payload;
     try {
       payload = verifyToken(state);
+      if (payload.purpose !== 'strava_oauth') {
+        throw new Error('wrong purpose');
+      }
     } catch {
       throw new AppError('Invalid OAuth state', 400);
     }
@@ -106,6 +116,7 @@ router.get(
 
 router.post(
   '/disconnect',
+  connectLimiter,
   requireAuth,
   asyncHandler(async (req, res) => {
     const conn = await getStoredConnection(req.user.id);
@@ -131,9 +142,32 @@ router.post(
         updated_at: db.fn.now()
       });
 
-    await db('challenge_activities').where({ source: 'strava' }).del();
+    // Scope cleanup to THIS user's enrollments only — never touch other members' data
+    await db('challenge_activities')
+      .where({ source: 'strava' })
+      .whereIn('enrollment_id', db('enrollments').where({ user_id: req.user.id }).select('id'))
+      .del();
 
     res.json({ message: 'Strava disconnected' });
+  })
+);
+
+router.post(
+  '/sync',
+  connectLimiter,
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const conn = await getStoredConnection(req.user.id);
+    if (!conn || conn.status !== 'connected') {
+      throw new AppError('Connect Strava before syncing', 409);
+    }
+    const result = await syncStrava(req.user.id);
+    res.json({
+      imported: result.imported,
+      total: result.total,
+      rateLimited: result.rateLimited,
+      lastSyncedAt: new Date().toISOString()
+    });
   })
 );
 
@@ -144,6 +178,7 @@ router.get(
     const enrollment = await db('enrollments')
       .join('challenges', 'challenges.id', 'enrollments.challenge_id')
       .where({ 'enrollments.user_id': req.user.id, 'challenges.is_active': true })
+      .select('enrollments.*')
       .first();
     if (!enrollment) {
       return res.json({ activities: [] });

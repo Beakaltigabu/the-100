@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
-import { LoadingState, ErrorState } from '../../components/States';
+import { ErrorState } from '../../components/States';
+import PageSkeleton from '../../components/PageSkeleton';
+import AdminNav from './AdminNav';
 import './Admin.css';
 
 export default function AdminAudit() {
@@ -22,17 +23,15 @@ export default function AdminAudit() {
 
   useEffect(load, [load]);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <PageSkeleton variant="admin" />;
   if (error) return <ErrorState message={error} onRetry={load} />;
   if (!entries) return null;
 
   return (
     <div className="admin page page--full">
+      <AdminNav />
       <div className="admin__head">
         <h1 className="admin__title">{t('adminAudit')}</h1>
-        <Link to="/admin">
-          <button className="btn btn--secondary btn--md">{t('backToHome')}</button>
-        </Link>
       </div>
 
       {entries.length === 0 ? (

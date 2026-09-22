@@ -1,0 +1,33 @@
+.circular {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.circular__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+}
+
+.circular__track {
+  stroke: var(--ds-track);
+  transition: stroke 0.2s ease;
+}
+
+.circular__fill {
+  stroke: var(--ds-accent);
+  transition: stroke-dashoffset 0.6s ease;
+  stroke-linecap: butt;
+}
+
+.circular__content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}

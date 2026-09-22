@@ -1,0 +1,200 @@
+/* ── THE 100 — branded skeleton ─────────────────────── */
+.sk {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-alt, var(--card-bg-alt));
+  border-radius: 6px;
+}
+
+.sk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--color-accent) 10%, transparent),
+    transparent
+  );
+  animation: sk-shimmer 1.4s infinite;
+}
+
+.sk-line {
+  height: 12px;
+}
+
+.sk-block {
+  height: 72px;
+}
+
+.sk-circle {
+  border-radius: 50%;
+}
+
+@keyframes sk-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.ps {
+  padding: 24px 20px 48px;
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+  flex: 1;
+}
+
+/* Hero */
+.ps-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ps-hero__kicker {
+  width: 140px;
+  height: 10px;
+}
+
+.ps-hero__title {
+  width: min(420px, 90%);
+  height: 64px;
+}
+
+.ps-hero__sub {
+  width: min(320px, 90%);
+}
+
+.ps-hero__sub--short {
+  width: min(220px, 70%);
+}
+
+/* Section */
+.ps-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ps-section__head {
+  width: 160px;
+  height: 10px;
+}
+
+.ps-section__line--60 {
+  width: 60%;
+}
+
+.ps-section__line--40 {
+  width: 40%;
+}
+
+/* Card grid */
+.ps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.ps-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+}
+
+.ps-card__value {
+  width: 60%;
+  height: 28px;
+}
+
+.ps-card__label {
+  width: 45%;
+  height: 9px;
+}
+
+/* Rows / big blocks */
+.ps-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.ps-big {
+  height: 160px;
+}
+
+/* Profile variant */
+.ps-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ps-avatar {
+  width: 64px;
+  height: 64px;
+}
+
+.ps-profile-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ps-name {
+  width: 60%;
+  height: 30px;
+}
+
+.ps-kicker {
+  width: 40%;
+  height: 9px;
+}
+
+.ps-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ps-tl-row {
+  height: 44px;
+}
+
+/* Admin variant */
+.ps-admin-nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ps-admin-tab {
+  width: 110px;
+  height: 36px;
+}
+
+@media (max-width: 480px) {
+  .ps-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ps-big {
+    height: 120px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk::after {
+    animation: none;
+  }
+}

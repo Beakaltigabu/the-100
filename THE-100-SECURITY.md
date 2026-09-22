@@ -12,26 +12,28 @@ your hosting/infrastructure, not code.
 |---|---|
 | Headers | Helmet: CSP, HSTS, COOP, CORP, nosniff, X-Frame-Options, Referrer-Policy |
 | CORS | Single origin (`CLIENT_ORIGIN`) with `credentials: true` |
-| Auth | JWT in httpOnly, `SameSite=Lax` cookie (Secure forced in prod via config validation) |
-| Passwords | bcrypt(10); min 10 chars with letter + number; login lockout (5 fails → 15 min per ip:email) |
+| Auth | JWT in httpOnly, `SameSite=Lax` cookie (Secure forced in prod via config validation); `token_version` claim invalidates all sessions on password reset |
+| Passwords | bcrypt(12); min 10 chars with letter + number; login lockout (5 fails → 15 min per ip:email); generic login errors + constant-time dummy compare (no user enumeration) |
+| Authorization | Ownership enforced server-side: activity delete joins through enrollments; Strava disconnect deletes only the caller's rows; community post delete = owner-or-admin |
 | Input | Zod validation on every route; 1 MB body cap; no file uploads |
 | Injection | All queries via Knex (parameterized); display names sanitized |
-| Webhooks | Strava HMAC-SHA1 + Telegram secret token — both compared with `timingSafeEqual` |
+| Webhooks | Strava HMAC-SHA1 + Telegram secret token — both compared with `timingSafeEqual`; Strava subscription verify-token also timing-safe; webhook jobs run without retries (idempotency) |
 | Secrets at rest | Strava tokens AES-256-GCM (`ENCRYPTION_KEY`); JWT `algorithms: ['HS256']` + iss/aud |
-| OAuth | Google & Strava `state` is a signed JWT (CSRF-safe); callbacks rate-limited |
+| OAuth | Google & Strava `state` is a purpose-bound signed JWT with a 10-minute expiry; Strava callback rejects non-`strava_oauth` tokens; Google `email_verified` required before linking |
 | Rate limits | Global API guardrail + auth/login/register/forgot/reset/connect/OAuth/admin/webhook limiters |
-| XSS | React escapes all output; no `dangerouslySetInnerHTML`/`eval`; build-time CSP for the SPA |
+| XSS | React escapes all output; no `dangerouslySetInnerHTML`/`eval`; build-time CSP for the SPA; server-supplied deep links opened only via an http/https/tg scheme allowlist |
 | PWA | Authenticated API endpoints removed from service-worker caching (privacy) |
 | Privacy | Account deletion endpoint (`DELETE /api/profile`) with transactional cascade; FK cascades enforced |
-| Reset | Password reset delivered only to the linked Telegram account; 15 min, single-use token |
+| Reset | Password reset delivered only to the linked Telegram account; 15 min, single-use token; outstanding tokens burned on new request |
 | Audit | Admin actions logged to `admin_audit_log`; viewable at `/admin/audit` |
-| Logging | Request logging (method/url/status/duration) on the API |
+| Logging | Request logging (method/path/status/duration) — **pathname only, query strings never logged** (OAuth codes can't leak into logs); 5xx AppError messages stay server-side |
 
 ## Fail-closed config
 
 In `NODE_ENV=production` the server **refuses to boot** unless:
-- `JWT_SECRET` is set to a strong, non-default secret
-- `ENCRYPTION_KEY` is set (32+ bytes)
+- `JWT_SECRET` is set to a strong, non-default secret of **32+ characters**
+- `ENCRYPTION_KEY` is set to **32+ characters** (validated at boot, not first use)
+- `DB_PASSWORD` is non-empty
 - `CLIENT_ORIGIN` and `BASE_URL` are HTTPS
 - `COOKIE_SECURE=true`
 

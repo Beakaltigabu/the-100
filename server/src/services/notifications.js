@@ -12,8 +12,10 @@ async function createNotification({ userId, type, title, body, channel = 'web' }
   return id;
 }
 
-async function listForUser(userId) {
-  return db('notifications').where({ user_id: userId }).orderBy('created_at', 'desc');
+// Bounded: a user accumulates weekly/inactivity notifications every challenge,
+// so never return the unbounded history.
+async function listForUser(userId, limit = 50) {
+  return db('notifications').where({ user_id: userId }).orderBy('created_at', 'desc').limit(limit);
 }
 
 async function markAllRead(userId) {

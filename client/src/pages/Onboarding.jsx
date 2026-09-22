@@ -1,19 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { usePageMeta } from '../hooks/usePageMeta';
 import { useToast } from '../components/Toast';
+import { LoadingState } from '../components/States';
 import Button from '../components/Button';
 import GoalCard from '../components/GoalCard';
 import ProgressBar from '../components/ProgressBar';
 import PasswordField from '../components/PasswordField';
 import OAuthButtons from '../components/OAuthButtons';
-import { ACTIVITY_KEYS, ACTIVITY_SUBTITLE_KEYS, baselineOptionsFor, unitKey } from '../lib/activity';
+import { ACTIVITY_KEYS, ACTIVITY_SUBTITLE_KEYS, activityLabelKey, baselineOptionsFor, unitKey } from '../lib/activity';
 import { MOTIVATION_KEYS, MOTIVATION_MAX, motivationLabelKey, motivationGuidanceKey } from '../lib/motivation';
+import { passwordStrength } from '../lib/password';
+import { passwordIssues, authErrorMessage } from '../lib/validation';
 import './Onboarding.css';
 
 const DRAFT_KEY = 'the100_draft';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EXPERIENCE_KEYS = ['beginner', 'occasional', 'consistent', 'experienced'];
 const TIME_KEYS = ['morning', 'evening', 'flexible'];
 const DAY_KEYS = ['daySun', 'dayMon', 'dayTue', 'dayWed', 'dayThu', 'dayFri', 'daySat'];
@@ -122,8 +127,9 @@ function DayChips({ selected, onToggle, t }) {
 }
 
 export default function Onboarding() {
+  usePageMeta({ title: 'Onboarding', path: '/onboarding', index: false });
   const { t } = useLanguage();
-  const { user, register, login } = useAuth();
+  const { user, register, login, refresh } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -143,11 +149,16 @@ export default function Onboarding() {
 
   const [authMode, setAuthMode] = useState('register');
   const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', confirm: '' });
+  const [authAttempted, setAuthAttempted] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // Set when an authed user returns (e.g. after Google OAuth) with a draft goal:
   // we auto-complete once state settles so they land on the dashboard.
   const pendingAutoFinishRef = useRef(false);
   const finishRef = useRef(null);
+  // While true, hide the onboarding steps (a stale goal step must not flash
+  // before the auto-finish redirects to the dashboard).
+  const [autoFinishing, setAutoFinishing] = useState(false);
 
   const stages = user ? STAGE_KEYS.slice(0, 5) : STAGE_KEYS;
   const totalSteps = stages.length;
@@ -183,6 +194,7 @@ export default function Onboarding() {
       // After OAuth (authed) with a goal already chosen, auto-complete to the dashboard.
       if (user && (draft.goal != null || (draft.customMode && draft.customGoal))) {
         pendingAutoFinishRef.current = true;
+        setAutoFinishing(true);
       }
       return;
     }
@@ -241,7 +253,7 @@ export default function Onboarding() {
 
   const activityOptions = ACTIVITY_KEYS.map((k) => ({
     value: k,
-    label: t(k),
+    label: t(activityLabelKey(k)),
     sub: t(ACTIVITY_SUBTITLE_KEYS[k])
   }));
   const experienceOptions = EXPERIENCE_KEYS.map((k) => ({ value: k, label: t(k) }));
@@ -283,8 +295,11 @@ export default function Onboarding() {
   const goalValue = customMode ? parseFloat(customGoal) : selectedGoal;
 
   // After auth (or for an already-logged-in user): apply draft and commit.
+  const finishInFlight = useRef(false);
   const finish = useCallback(
     async (me) => {
+      if (finishInFlight.current) return;
+      finishInFlight.current = true;
       setBusy(true);
       setError('');
       try {
@@ -297,34 +312,40 @@ export default function Onboarding() {
             preferred_time: preferredTime,
             schedule_days: scheduleDays
           });
+          await refresh(); // reload the context user so motivation/WHY show immediately
         }
         const cur = await api.get('/api/challenges/current');
         if (cur.enrollment) {
+          await refresh(); // keep hasEnrollment current before leaving
           clearDraft();
           showToast(t('alreadyIn100'), 'info');
           navigate('/dashboard');
           return;
         }
-        await api.post('/api/challenges/enroll', {
+        const res = await api.post('/api/challenges/enroll', {
           activity_type: activityType,
           goal_value: goalValue
         });
+        await refresh(); // enroll done → hasEnrollment is true so /dashboard isn't bounced back
         clearDraft();
-        showToast(t('commitmentStarted'), 'success');
+        showToast(res.alreadyEnrolled ? t('alreadyIn100') : t('commitmentStarted'), 'success');
         navigate('/dashboard');
       } catch (err) {
         if (err.status === 409) {
+          await refresh();
           clearDraft();
           showToast(t('alreadyIn100'), 'info');
           navigate('/dashboard');
           return;
         }
+        setAutoFinishing(false);
         setError(err.message);
       } finally {
+        finishInFlight.current = false;
         setBusy(false);
       }
     },
-    [activityType, experienceLevel, baseline, motivation, preferredTime, scheduleDays, goalValue, navigate, showToast, t]
+    [activityType, experienceLevel, baseline, motivation, preferredTime, scheduleDays, goalValue, navigate, showToast, t, refresh]
   );
 
   useEffect(() => {
@@ -333,28 +354,26 @@ export default function Onboarding() {
 
   // After OAuth (authed + draft goal restored), auto-complete to the dashboard once.
   useEffect(() => {
-    if (pendingAutoFinishRef.current && user && selectedGoal != null) {
+    if (pendingAutoFinishRef.current && user && (selectedGoal != null || (customMode && customGoal))) {
       pendingAutoFinishRef.current = false;
       finishRef.current?.(user);
     }
-  }, [user, selectedGoal]);
+  }, [user, selectedGoal, customMode, customGoal]);
 
   const confirmGoal = () => {
-    if (user) {
-      finish(user);
-    } else {
-      setError('');
-      setStep(6);
-    }
+    setError('');
+    setStep(5); // next: WHEN — auth (for guests) comes after the schedule
   };
 
   const submitAuth = async (e) => {
     e.preventDefault();
     setError('');
-    if (authMode === 'register' && authForm.password !== authForm.confirm) {
-      setError(t('passwordsMismatch'));
+    setAuthAttempted(true);
+    if (authMode === 'register' && !acceptedTerms) {
+      setError(t('termsRequired'));
       return;
     }
+    if (!emailOk || !authForm.password || (authMode === 'register' && (!nameOk || !passwordOk || !matchOk))) return;
     setBusy(true);
     try {
       const me =
@@ -364,7 +383,9 @@ export default function Onboarding() {
       showToast(authMode === 'register' ? t('registerSuccess') : t('loginSuccess'), 'success');
       await finish(me);
     } catch (err) {
-      setError(t('invalidCredentials'));
+      // Login failures stay generic; register surfaces the real reason
+      // (duplicate email, weak password) via the shared error mapper.
+      setError(authMode === 'register' ? authErrorMessage(err, t) : t('invalidCredentials'));
     } finally {
       setBusy(false);
     }
@@ -389,10 +410,23 @@ export default function Onboarding() {
     (step === 4 && (customMode ? goalValue > 0 : !!selectedGoal)) ||
     (step === 5 && preferredTime);
 
+  const nameOk = authForm.name.trim().length >= 2;
+  const emailOk = EMAIL_RE.test(authForm.email);
+  const pwdIssues = authMode === 'register' && authForm.password ? passwordIssues(authForm.password) : [];
+  const passwordOk = pwdIssues.length === 0;
+  const matchOk = authMode !== 'register' || (authForm.confirm.length > 0 && authForm.password === authForm.confirm);
+  const strength = passwordStrength(authForm.password);
+
   const authValid =
     authMode === 'register'
-      ? authForm.name && authForm.email && authForm.password.length >= 8 && authForm.confirm
-      : authForm.email && authForm.password;
+      ? nameOk && emailOk && passwordOk && matchOk && acceptedTerms
+      : emailOk && authForm.password.length >= 1;
+
+  // While auto-finishing (OAuth return with a restored goal), never show the
+  // steps — redirect straight to the dashboard instead of flashing a step.
+  if (autoFinishing) {
+    return <LoadingState />;
+  }
 
   return (
     <div className="ob page">
@@ -536,32 +570,44 @@ export default function Onboarding() {
               </button>
             </div>
 
-            <OAuthButtons returnTo="/onboarding" />
+            <OAuthButtons returnTo="/onboarding" mode="register" disabled={!acceptedTerms} onBlocked={() => setError(t('termsRequired'))} />
 
-            <form className="ob-auth" onSubmit={submitAuth}>
+            <form className="ob-auth" onSubmit={submitAuth} noValidate>
               {authMode === 'register' ? (
                 <label className="field">
                   <span className="field__label">{t('name')}</span>
                   <input
-                    className="field__input"
+                    className={`field__input ${authAttempted && !nameOk ? 'field__input--invalid' : ''}`.trim()}
                     value={authForm.name}
                     onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })}
                     placeholder={t('namePlaceholder')}
+                    autoComplete="name"
                     required
                   />
+                  {authAttempted && !authForm.name ? (
+                    <span className="field__hint">{t('nameRequired')}</span>
+                  ) : authForm.name && !nameOk ? (
+                    <span className="field__hint">{t('nameTooShort')}</span>
+                  ) : null}
                 </label>
               ) : null}
 
               <label className="field">
                 <span className="field__label">{t('email')}</span>
                 <input
-                  className="field__input"
+                  className={`field__input ${(authAttempted || authForm.email) && !emailOk ? 'field__input--invalid' : ''}`.trim()}
                   type="email"
                   value={authForm.email}
                   onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
                   placeholder={t('emailPlaceholder')}
+                  autoComplete="email"
                   required
                 />
+                {authAttempted && !authForm.email ? (
+                  <span className="field__hint">{t('emailRequired')}</span>
+                ) : authForm.email && !emailOk ? (
+                  <span className="field__hint">{t('validEmailRequired')}</span>
+                ) : null}
               </label>
 
               <PasswordField
@@ -569,9 +615,16 @@ export default function Onboarding() {
                 value={authForm.password}
                 onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
                 placeholder={t('passwordPlaceholder')}
-                minLength={8}
+                minLength={10}
                 required
+                showStrength={authMode === 'register'}
+                strength={strength}
+                issues={authMode === 'register' ? pwdIssues : []}
+                invalid={authAttempted && !authForm.password}
               />
+              {authAttempted && !authForm.password ? (
+                <span className="field__hint">{t('passwordRequired')}</span>
+              ) : null}
 
               {authMode === 'register' ? (
                 <PasswordField
@@ -579,7 +632,25 @@ export default function Onboarding() {
                   value={authForm.confirm}
                   onChange={(e) => setAuthForm({ ...authForm, confirm: e.target.value })}
                   required
+                  invalid={authForm.confirm && !matchOk}
                 />
+              ) : null}
+              {authMode === 'register' && authForm.confirm && !matchOk ? (
+                <span className="field__hint">{t('passwordsMismatch')}</span>
+              ) : null}
+
+              {authMode === 'register' ? (
+                <label className="auth-terms">
+                  <input
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    required
+                  />
+                  <span>
+                    {t('termsAccept')} <Link to="/privacy" className="auth-card__link">{t('termsAndPrivacy')}</Link>
+                  </span>
+                </label>
               ) : null}
 
               {error ? <p className="ob-error">{error}</p> : null}

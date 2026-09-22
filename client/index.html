@@ -4,19 +4,276 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#101010" />
-    <meta name="referrer" content="no-referrer" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+    <!-- Primary SEO -->
+    <title>THE 100 — 100 Day Commitment Challenge | Choose Your Goal, Show Up, Finish</title>
+    <meta
+      name="description"
+      content="THE 100 is a free 100-day personal movement challenge. Choose your goal — running, walking, run + walk, or cycling — commit for 100 days, and finish what you started. Progress tracked manually or via Strava, with a bilingual (English / Amharic) community."
+    />
+    <meta
+      name="keywords"
+      content="100 day challenge, running challenge, walking challenge, cycling challenge, 100 km goal, Strava, fitness commitment, personal goal, community, Ethiopia, bilingual, Amharic"
+    />
+    <meta name="author" content="THE 100" />
+    <meta name="robots" content="index, follow" />
+    <meta name="googlebot" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://chooseyour100.com/" />
+
+    <!-- Language alternatives -->
+    <link rel="alternate" hreflang="en" href="https://chooseyour100.com/" />
+    <link rel="alternate" hreflang="am" href="https://chooseyour100.com/?lang=am" />
+    <link rel="alternate" hreflang="x-default" href="https://chooseyour100.com/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="THE 100" />
+    <meta property="og:title" content="THE 100 — 100 Day Commitment Challenge" />
+    <meta
+      property="og:description"
+      content="Choose a goal. Commit for 100 days. Finish what you started. A free 100-day personal movement challenge for running, walking, and cycling — with a bilingual community."
+    />
+    <meta property="og:url" content="https://chooseyour100.com/" />
+    <meta property="og:image" content="https://chooseyour100.com/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="THE 100 — 100 days. Your goal. Your commitment." />
+    <meta property="og:locale" content="en" />
+    <meta property="og:locale:alternate" content="am" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="THE 100 — 100 Day Commitment Challenge" />
+    <meta
+      name="twitter:description"
+      content="Choose a goal. Commit for 100 days. Finish what you started. Free 100-day challenge for running, walking, and cycling."
+    />
+    <meta name="twitter:image" content="https://chooseyour100.com/og-image.jpg" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://api.chooseyour100.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Noto+Sans+Ethiopic:wght@400;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Anton&family=Noto+Sans+Ethiopic:wght@400;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/icons/pwa-192.png" />
-    <title>THE 100</title>
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-180.png" />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "@id": "https://chooseyour100.com/#organization",
+      "name": "THE 100",
+      "url": "https://chooseyour100.com/",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://chooseyour100.com/logo-1.jpg",
+        "width": 512,
+        "height": 512
+      },
+      "slogan": "100 days. Your goal. Your commitment.",
+      "description": "THE 100 is a free 100-day personal movement challenge. Choose your goal — running, walking, run + walk, or cycling — commit for 100 days, and finish what you started.",
+      "sameAs": [
+        "https://t.me/the100days_bot",
+        "https://t.me/+pOsJz7n6qEQzMWY8"
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://chooseyour100.com/#website",
+      "url": "https://chooseyour100.com/",
+      "name": "THE 100",
+      "description": "A 100-day commitment movement. Choose your goal, commit for 100 days, and finish what you started.",
+      "publisher": { "@id": "https://chooseyour100.com/#organization" },
+      "inLanguage": ["en", "am"]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "@id": "https://chooseyour100.com/#app",
+      "name": "THE 100",
+      "applicationCategory": "SportsApplication",
+      "operatingSystem": "Any",
+      "url": "https://chooseyour100.com/",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "featureList": [
+        "Choose a personal 100-day goal",
+        "Log activities manually or via Strava",
+        "Track milestones and streaks",
+        "Bilingual English / Amharic community",
+        "Telegram check-ins and notifications"
+      ],
+      "provider": { "@id": "https://chooseyour100.com/#organization" }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "@id": "https://chooseyour100.com/#howto",
+      "name": "How to complete a 100-day challenge with THE 100",
+      "description": "Join, choose your goal, commit for 100 days, and finish what you started.",
+      "totalTime": "P100D",
+      "step": [
+        { "@type": "HowToStep", "position": 1, "name": "Join THE 100", "text": "Create your free account in under a minute." },
+        { "@type": "HowToStep", "position": 2, "name": "Find your starting point", "text": "Choose your activity — running, walking, run + walk, or cycling — and how much you do each week." },
+        { "@type": "HowToStep", "position": 3, "name": "Choose your goal", "text": "Pick a distance you can commit to. Your goal is personal, not a comparison." },
+        { "@type": "HowToStep", "position": 4, "name": "Commit for 100 days", "text": "Confirm your goal. Consistency beats intensity — you don't need perfect days, just repeated ones." },
+        { "@type": "HowToStep", "position": 5, "name": "Log and hit milestones", "text": "Record each run, walk, or ride manually or automatically via Strava. Milestones mark the way." },
+        { "@type": "HowToStep", "position": 6, "name": "Finish what you started", "text": "Join the private community for accountability. On day 100 you've finished what you started." }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "@id": "https://chooseyour100.com/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is THE 100?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "THE 100 is a free 100-day personal movement challenge. You choose a goal — running, walking, run + walk, or cycling — commit for 100 days, and log your progress. The only person you're racing is the person you were 100 days ago."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does the 100-day challenge work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Create a free account, choose your activity and how much you do each week, pick a goal we recommend (or set your own), and commit. Log each run, walk, or ride manually or automatically via Strava, and milestones mark your progress toward day 100."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is THE 100 free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Creating an account, choosing your goal, logging activities, and joining the community are completely free."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What activities count toward the challenge?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Running, walking, run + walk, and cycling. You can log each activity manually in the app or by Telegram, or connect Strava to sync automatically."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I need to be fit to join?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. You choose your own goal starting from where you are. A beginner finishing 50 km and a runner finishing 1,000 km are equally successful because you only compete with the person you were 100 days ago."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "When does the challenge start and how long is it?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "THE 100 runs for 100 days. The current challenge starts on September 23, 2026 and ends on December 31, 2026."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I track my progress?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Log each activity in the app, send /checkin to the THE 100 Telegram bot, or sync Strava automatically. You can see your day number, total distance, milestones, and streaks in the app."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is THE 100 available in Amharic?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. The app and the Telegram bot are fully bilingual in English and Amharic (አማርኛ). You can switch languages any time in the app."
+          }
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Event",
+      "@id": "https://chooseyour100.com/#event",
+      "name": "THE 100 — 2026 Challenge",
+      "description": "A free 100-day personal movement challenge. Choose your goal, commit for 100 days, and finish what you started.",
+      "startDate": "2026-09-23T00:00:00+03:00",
+      "endDate": "2026-12-31T23:59:59+03:00",
+      "eventAttendanceMode": "https://schema.org/OnlineEventAttendanceMode",
+      "eventStatus": "https://schema.org/EventScheduled",
+      "location": { "@type": "VirtualLocation", "url": "https://chooseyour100.com/" },
+      "organizer": { "@id": "https://chooseyour100.com/#organization" },
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" }
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- Crawlable static content for non-JS bots and AI crawlers (GPTBot,
+         ClaudeBot, PerplexityBot, Google AI mode, etc.). Never shown to users
+         with JavaScript enabled. -->
+    <noscript>
+      <main style="font-family:system-ui,sans-serif;max-width:60rem;margin:0 auto;padding:2rem 1rem;line-height:1.6">
+        <h1>THE 100 — 100 Day Commitment Challenge</h1>
+        <p>THE 100 is a free 100-day personal movement challenge. Choose your goal — running, walking, run + walk, or cycling — commit for 100 days, and finish what you started. Progress is tracked manually or automatically via Strava, with a bilingual English / Amharic (አማርኛ) community.</p>
+
+        <h2>The Manifesto</h2>
+        <p>THE 100 isn't about being the fastest, the strongest, or doing the most. It's about choosing something that matters to you and giving 100% of yourself to it for 100 days.</p>
+        <p>We all start somewhere different. Your distance is yours. Your journey is yours. Some days will be easy. Some days, showing up will be the hardest part. Both count.</p>
+        <p>Because the real challenge isn't the distance. It's giving your best, keeping your word, and becoming someone you're proud of. We move individually, but we don't move alone.</p>
+        <p><strong>100 days. One commitment. Thousands of journeys.</strong></p>
+        <p><strong>Start where you are. Give 100%. Show up.</strong></p>
+
+        <h2>How it works</h2>
+        <ol>
+          <li><strong>Join THE 100</strong> — Create your free account in under a minute.</li>
+          <li><strong>Your starting point</strong> — Choose your activity (running, walking, run + walk, cycling) and how much you do each week.</li>
+          <li><strong>Choose your goal</strong> — Pick a distance you can commit to, recommended for your level or set your own.</li>
+          <li><strong>Commit for 100 days</strong> — Confirm your goal and your 100 days begin. Consistency beats intensity.</li>
+          <li><strong>Log and hit milestones</strong> — Record each run, walk, or ride manually or via Strava. Milestones (10, 50, 100 km…) mark the way.</li>
+          <li><strong>Finish</strong> — On day 100 you'll have finished what you started. That's the point.</li>
+        </ol>
+
+        <h2>Start where you are</h2>
+        <p>Choose a starting point that fits you — 20 km, 50 km, 100 km, 200 km, 500 km, 1,000 km or more. Different distances. Same commitment. These are not rankings.</p>
+
+        <h2>Frequently asked questions</h2>
+        <h3>What is THE 100?</h3>
+        <p>THE 100 is a free 100-day personal movement challenge. You choose a goal — running, walking, run + walk, or cycling — commit for 100 days, and log your progress. The only person you're racing is the person you were 100 days ago.</p>
+        <h3>How does the 100-day challenge work?</h3>
+        <p>Create a free account, choose your activity and how much you do each week, pick a goal we recommend (or set your own), and commit. Log each activity manually or via Strava, and milestones mark your progress toward day 100.</p>
+        <h3>Is THE 100 free?</h3>
+        <p>Yes. Creating an account, choosing your goal, logging activities, and joining the community are completely free.</p>
+        <h3>What activities count?</h3>
+        <p>Running, walking, run + walk, and cycling. Log manually in the app or by Telegram, or connect Strava to sync automatically.</p>
+        <h3>Do I need to be fit to join?</h3>
+        <p>No. You choose your own goal starting from where you are. A beginner finishing 50 km and a runner finishing 1,000 km are equally successful.</p>
+        <h3>When does the challenge start?</h3>
+        <p>THE 100 runs for 100 days. The current challenge starts on September 23, 2026 and ends on December 31, 2026.</p>
+        <h3>Is THE 100 available in Amharic?</h3>
+        <p>Yes. The app and the Telegram bot are fully bilingual in English and Amharic (አማርኛ).</p>
+
+        <p><a href="https://chooseyour100.com/">Join THE 100</a> — it's free. Or connect on Telegram: <a href="https://t.me/the100days_bot">@the100days_bot</a>.</p>
+      </main>
+    </noscript>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

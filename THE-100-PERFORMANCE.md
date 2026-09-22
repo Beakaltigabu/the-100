@@ -45,6 +45,60 @@ re-run before launch.
 
 ---
 
+## Pre-deployment pass (Sept 21 2026)
+
+### Queries & indexes
+- **New migration `20260921000000_security_perf.js`**:
+  - `community_posts(type, status, challenge_id, created_at)` composite — the feed
+    check-in query went from full scan + filesort to an indexed range scan; the old
+    single-column `created_at` index was dropped as redundant.
+  - `enrollments(completed_at)` and `enrollments(created_at)` — feed finisher/join
+    ordering no longer filesorts the whole table.
+  - Dropped redundant `community_cheers(item_key)` (covered by the unique
+    `(item_key, user_id)` leftmost prefix).
+  - `users.token_version` (security — session invalidation).
+- **`GET /api/community/people`** — was loading the full enrollment×user join plus
+  two aggregate scans, then slicing 8–20 rows in JS. Now a single query with a
+  grouped subquery (`SUM`/`MAX` per enrollment), `ORDER BY` + `LIMIT` in SQL.
+- **Feed cheers** — was loading every cheer row for the page and matching in JS
+  (O(items × cheers)). Now one `GROUP BY item_key` count query + one viewer-scoped
+  lookup with `Set` membership.
+- **`GET /api/admin/members`** — paginated (`page`/`limit`, default/max 500) with a
+  `total` count; **`GET /api/notifications`** — bounded to the latest 50.
+- **Scheduler** — per-member `users` lookups batched with `WHERE id IN (...)`;
+  jobs isolated (one failure no longer aborts the cycle) and an overlap mutex
+  prevents interleaved 6-hour cycles.
+- **Finish detection race** — enrollment completion is now an atomic conditional
+  `UPDATE ... WHERE status IN (...)`; only the winning caller announces the finish
+  (no duplicate broadcasts when a manual log races the scheduler).
+- **`getActiveChallenge`** memoized getter now used at every call site (was queried
+  raw in ~6 places).
+
+### Runtime
+- **Job queue** — hard backlog cap (5,000) with drop-and-log; retries re-count
+  against the backlog. Login-guard map capped (10k entries, expired-sweep + LRU).
+- **DB pool** — explicit acquire/create/idle timeouts (10s/10s/30s); max size
+  env-tunable via `DB_POOL_MAX`.
+- **Admin stats** — 30s in-process cache (was 6 aggregate queries per dashboard load);
+  **`/api/community/stats`** — `Cache-Control: private, max-age=30`.
+- **Compression** — back to the 1 KB default threshold (was compressing every
+  tiny JSON response).
+
+### Static & client
+- **Immutable caching** for Vite's content-hashed `/assets` — both in the Express
+  static handler (same-origin deploys) and the Apache `.htaccess` (`Cache-Control:
+  public, max-age=31536000, immutable`); `index.html`/`sw.js`/manifest are
+  `no-cache` so deploys propagate instantly.
+- **`.htaccess` security headers** — nosniff, frame-deny, Referrer-Policy,
+  Permissions-Policy.
+- **Full route-level code splitting** — every page except Login/Register is lazy.
+  Main chunk **224 KB → 162 KB** (gzip 52 KB); admin chunks excluded from the PWA
+  precache along with the 512 px icon (precache ~445 KB and capped at 300 KB/file).
+- **Community refetch-on-focus** — gated by a 60 s staleness check (was firing the
+  full 5-request fan-out on every alt-tab).
+
+---
+
 ## Load-test baseline
 
 Machine: local (Windows, Node 26, Laragon MySQL). 20 connections, 4s per endpoint,
@@ -91,6 +145,9 @@ WHERE TABLE_SCHEMA='the100'
     OR (TABLE_NAME='challenge_activities' AND INDEX_NAME LIKE '%_date_index%')
     OR (TABLE_NAME='milestones'  AND INDEX_NAME LIKE '%reached_at%')
     OR (TABLE_NAME='enrollments' AND INDEX_NAME LIKE '%status%')
+    OR (TABLE_NAME='enrollments' AND INDEX_NAME LIKE '%completed_at%')
+    OR (TABLE_NAME='enrollments' AND INDEX_NAME LIKE '%created_at%')
+    OR (TABLE_NAME='community_posts' AND INDEX_NAME='community_posts_feed_idx')
     OR (TABLE_NAME='notifications' AND INDEX_NAME LIKE '%user_id_created_at%'));
 ```
 

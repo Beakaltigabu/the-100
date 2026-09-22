@@ -12,6 +12,8 @@
     "telegram:webhook:info": "node scripts/telegram-setwebhook.mjs info",
     "telegram:webhook:remove": "node scripts/telegram-setwebhook.mjs remove",
     "telegram:setup": "node scripts/telegram-setup.mjs",
+    "telegram:dev": "node scripts/telegram-dev.mjs",
+    "telegram:health": "node scripts/telegram-health.mjs",
     "loadtest": "node scripts/loadtest.mjs"
   },
   "dependencies": {

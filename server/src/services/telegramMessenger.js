@@ -3,27 +3,38 @@ const db = require('../db');
 const { enqueue } = require('./queue');
 const botMessages = require('./botMessages');
 const { getActiveChallenge, hasChallengeStarted } = require('./challengeWindow');
+const { logEvent } = require('./logger');
 
 function configured() {
   return !!config.telegram.botToken;
 }
 
 async function deliver(chatId, text, markup) {
-  try {
-    const payload = { chat_id: chatId, text, parse_mode: 'HTML' };
-    if (markup) payload.reply_markup = markup;
-    const res = await fetch(`https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+  const payload = { chat_id: chatId, text, parse_mode: 'HTML' };
+  if (markup) payload.reply_markup = markup;
+  const res = await fetch(`https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    logEvent({
+      source: 'bot',
+      type: 'send_fail',
+      message: `sendMessage to ${chatId} failed: ${res.status}`,
+      meta: { chatId: String(chatId), status: res.status, detail: body.slice(0, 200) }
     });
-    if (!res.ok) {
-      const body = await res.text();
-      console.error('Telegram sendMessage failed:', res.status, body.slice(0, 200));
-    }
-  } catch (err) {
-    console.error('Telegram send error:', err.message);
+    const err = new Error(`Telegram sendMessage failed: ${res.status} ${body.slice(0, 200)}`);
+    err.status = res.status;
+    throw err; // let the queue retry transient failures
   }
+  logEvent({
+    source: 'bot',
+    type: 'send_ok',
+    message: `sent to ${chatId}`,
+    meta: { chatId: String(chatId), length: text.length }
+  });
 }
 
 // Language of a member (for bilingual bot messages).
@@ -32,27 +43,30 @@ async function getUserLanguage(userId) {
   return (user && user.language) || 'en';
 }
 
-// Send a DM to a linked member (fire-and-forget).
+// Send a DM to a linked member (fire-and-forget, retried on failure).
 function sendToUser(userId, text) {
   if (!configured()) return;
-  enqueue(async () => {
-    const conn = await db('telegram_connections').where({ user_id: userId, state: 'active' }).first();
-    if (conn && conn.telegram_user_id) {
-      await deliver(conn.telegram_user_id, text);
-    }
-  });
+  enqueue(
+    async () => {
+      const conn = await db('telegram_connections').where({ user_id: userId, state: 'active' }).first();
+      if (conn && conn.telegram_user_id) {
+        await deliver(conn.telegram_user_id, text);
+      }
+    },
+    { maxAttempts: 3, delay: 2000 }
+  );
 }
 
 // Post to the brand's group/channel (no-op until TELEGRAM_GROUP_ID is set).
 function sendToGroup(text) {
   if (!configured() || !config.telegram.groupId) return;
-  enqueue(() => deliver(config.telegram.groupId, text));
+  enqueue(() => deliver(config.telegram.groupId, text), { maxAttempts: 3, delay: 2000 });
 }
 
 // Reply to a specific chat (used by the webhook handler).
 function sendToChat(chatId, text, markup) {
   if (!configured()) return;
-  enqueue(() => deliver(chatId, text, markup));
+  enqueue(() => deliver(chatId, text, markup), { maxAttempts: 3, delay: 2000 });
 }
 
 // Inline "JOIN THE COMMUNITY" button pointing at the private community group.
@@ -64,19 +78,20 @@ function joinCommunityMarkup(lang) {
   };
 }
 
-// Approve a pending chat join request (requires the bot to be admin).
+// Approve a pending chat join request (requires the bot to be admin). Honors the
+// HTTP response so callers can tell a real failure from success.
 async function approveJoinRequest(chatId, userId) {
-  try {
-    await fetch(`https://api.telegram.org/bot${config.telegram.botToken}/approveChatJoinRequest`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, user_id: userId })
-    });
-    return true;
-  } catch (err) {
-    console.error('Telegram approve error:', err.message);
+  const res = await fetch(`https://api.telegram.org/bot${config.telegram.botToken}/approveChatJoinRequest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, user_id: userId })
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    console.error('Telegram approveChatJoinRequest failed:', res.status, body.slice(0, 200));
     return false;
   }
+  return true;
 }
 
 // Group broadcasts only go out once the challenge has started (keeps the group clean pre-launch).
@@ -102,6 +117,20 @@ async function broadcastDigest(checked, milestones, finishers) {
   if (await groupLive()) sendToGroup(botMessages.groupDigest(checked, milestones, finishers));
 }
 
+// Reads the currently registered webhook. Returns null when the bot isn't
+// configured or Telegram is unreachable.
+async function getWebhookInfo() {
+  if (!configured()) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${config.telegram.botToken}/getWebhookInfo`);
+    const data = await res.json();
+    return data && data.ok ? data.result : null;
+  } catch (err) {
+    console.error('Telegram getWebhookInfo error:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   sendToUser,
   sendToGroup,
@@ -109,6 +138,7 @@ module.exports = {
   getUserLanguage,
   joinCommunityMarkup,
   approveJoinRequest,
+  getWebhookInfo,
   broadcastMilestone,
   broadcastFinish,
   broadcastJoin,

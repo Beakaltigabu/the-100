@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { translations } from '../i18n/translations';
 
 const LanguageContext = createContext(null);
@@ -11,6 +11,11 @@ export function LanguageProvider({ children }) {
     const browserLang = navigator.language || 'en';
     return browserLang.toLowerCase().startsWith('am') ? 'am' : 'en';
   });
+
+  // Keep <html lang> in sync — including the initial stored preference.
+  useEffect(() => {
+    document.documentElement.lang = lang === 'am' ? 'am' : 'en';
+  }, [lang]);
 
   const setLang = useCallback((next) => {
     setLangState(next);

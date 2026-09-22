@@ -50,8 +50,15 @@ cd ../client && npm install && npm run build
 
 **What gets deployed**
 - `client/dist/` → uploaded to `public_html` (SPA).
-- `server/` → the Node app (source + `node_modules` + env) uploaded via File Manager.
-- `db/migrations/` → copied into the app root so the backend can run them on boot.
+- `server/` → the Node app (source + env) uploaded via File Manager
+  (`node_modules` installed by the CloudLinux NodeJS Selector, §4.4).
+- `db/migrations/` → copied into the app root (kept for future migrations, §4.6).
+- `db/schema.sql` → imported once via phpMyAdmin (no migration step after upload).
+- **On the live DB** (phpMyAdmin, in order): `db/observability.sql` (request/error/event
+  logs) then `db/contact-messages.sql` (support inbox). For fresh DBs these are already
+  inside `db/schema.sql`.
+- Public pages: **Support** `https://chooseyour100.com/support`, **Privacy**
+  `https://chooseyour100.com/privacy` (Strava review URLs).
 
 **Backend code changes required for this deployment** (documented in §4). Do these
 locally before building/uploading:
@@ -89,7 +96,7 @@ openssl rand -hex 24   # STRAVA_VERIFY_TOKEN
 | MySQL user | `chooseyo_the100_app` |
 | MySQL pass | `<db-password>` — **watch the special chars** (`;` and `[`) |
 | DB host/port | `localhost` / `3306` |
-| Migration method | `AUTO_MIGRATE=true` on first boot (or phpMyAdmin import, §6) |
+| Migration method | phpMyAdmin schema import (§4.6) — `AUTO_MIGRATE=false` |
 
 **Secrets (generated during implementation — never commit):**
 - `JWT_SECRET`, `ENCRYPTION_KEY`, `STRAVA_VERIFY_TOKEN` (values will be printed once).
@@ -155,6 +162,10 @@ The uploaded `db/` folder must sit **inside the app root** (so the path
 Set these in **cPanel → Setup Node.js App → Environment Variables** (preferred) or in
 `server/.env` (upload via File Manager with "Show hidden files" enabled):
 
+> `server/.env` is already populated with the production values (dev values are
+> commented out above them). Upload it directly, or copy its values into the
+> cPanel env UI. Local dev lives in `server/.env.dev.bak`.
+
 | Variable | Value |
 |---|---|
 | `NODE_ENV` | `production` |
@@ -179,13 +190,14 @@ Set these in **cPanel → Setup Node.js App → Environment Variables** (preferr
 | `TELEGRAM_GROUP_LINK` | `https://t.me/+pOsJz7n6qEQzMWY8` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | (reuse existing app) |
 | `GOOGLE_REDIRECT_URI` | `https://api.chooseyour100.com/api/auth/google/callback` |
-| `AUTO_MIGRATE` | `true` for first boot → then `false` |
+| `APP_TIMEZONE` | `Africa/Addis_Ababa` (optional; default matches) |
+| `AUTO_MIGRATE` | `false` (schema is imported via phpMyAdmin, §4.6) |
 
 > The server **refuses to boot** in production unless `JWT_SECRET`, `ENCRYPTION_KEY`,
-> HTTPS `CLIENT_ORIGIN`/`BASE_URL`, and `COOKIE_SECURE=true` are set
-> (`server/src/config/validate.js`).
+> HTTPS `CLIENT_ORIGIN`/`BASE_URL`, `COOKIE_SECURE=true`, **and `TELEGRAM_BOT_TOKEN`**
+> are set (`server/src/config/validate.js`).
 
-### 4.4 Upload layout (File Manager)
+### 4.4 Upload layout (File Manager + CloudLinux NodeJS Selector)
 
 Create the app root (e.g. `~/the100-api/`), then upload/zip-extract:
 
@@ -194,15 +206,20 @@ the100-api/                     ← cPanel Node.js Application root
 ├── src/                        (server source)
 ├── scripts/                    (webhook/setup scripts)
 ├── db/
-│   └── migrations/             (knex migrations — for AUTO_MIGRATE)
-├── node_modules/               (pure-JS build from your machine)
+│   └── migrations/             (knex migrations — kept for future AUTO_MIGRATE)
 ├── package.json
 └── package-lock.json
 ```
 
+⚠️ **Do NOT include `node_modules`** in the zip. The CloudLinux **NodeJS Selector**
+installs packages itself from `package.json` (via the Setup Node.js App UI) — an
+uploaded `node_modules` breaks the app. After creating the app in §4.5, click the
+selector's "Run" / reload to install dependencies, then Start.
+
 Steps:
 1. Locally: `cd server && npm install` (pure JS after §4.1).
-2. Zip the app-root contents (**excluding** `.env` if you use the env UI instead).
+2. Zip the app-root contents (**excluding** `.env` if you use the env UI, and
+   **excluding** `tests/`, `scripts/telegram-dev.mjs`, `.env.dev.bak`).
 3. cPanel **File Manager** → navigate to the app root → upload the zip → **Extract**.
    - cPanel **Terminal not required** — everything is File Manager + the Node app UI.
 
@@ -216,28 +233,42 @@ Steps:
    - Application entry point: `src/index.js`
    - **Create**, then **Environment Variables** → add §4.3.
 2. **Start** the app. Watch the log (cPanel shows "Logs") for:
-   - `[migrate] applying knex migrations…` (if `AUTO_MIGRATE=true`)
    - `THE 100 API listening on http://localhost:<port>`
-3. After the first successful boot, set `AUTO_MIGRATE=false` and restart.
+   - `[telegram] webhook is set to …` warnings only if the webhook URL is wrong.
+3. `AUTO_MIGRATE` stays `false` — the schema is imported once via phpMyAdmin (§4.6),
+   so **no migration step is needed after upload**.
 
-### 4.6 Migrations — the two options
+### 4.6 Schema — the recommended flow (no migrations after upload)
 
-**Option A (recommended): `AUTO_MIGRATE=true`** — knex runs `migrate:latest` at boot
-against the uploaded `db/migrations`. The DB user has ALL PRIVILEGES, so DDL works.
-Set `false` after the first boot.
+Import the **already-current schema** so production matches local exactly. The repo's
+`db/schema.sql` is regenerated from a fully-migrated database and contains every table
+**plus** the `knex_migrations` state rows, so nothing else needs to run.
 
-**Option B: phpMyAdmin import** — export a schema dump from a migrated copy and import
-it once in cPanel **phpMyAdmin** (no shell needed):
-1. Locally, from a database with all migrations applied: `mysqldump --no-data
-   chooseyo_the100_prod > schema.sql` (or `npm run db:dump:schema` helper).
-2. phpMyAdmin → select `chooseyo_the100_prod` → **Import** → `schema.sql`.
-3. Keep `AUTO_MIGRATE` off or leave it `true` — knex skips already-applied migrations
-   only if the `knex_migrations` table is present; the dump includes it.
+1. cPanel **phpMyAdmin** → select `chooseyo_the100_prod` → **Import** → `db/schema.sql`.
+2. Keep `AUTO_MIGRATE=false`. Because the `knex_migrations` table ships populated,
+   even a stray `AUTO_MIGRATE=true` would skip everything.
+3. Verify: 19 tables appear (`meta`, `community_announcements`,
+   `community_reports`, `community_cheers`, …).
 
-> Future migrations: re-run `AUTO_MIGRATE=true` once (restart) or import the
-> incremental SQL. Keep the dump / migration set in sync with the deployed code.
+> **Future migrations**: when a new migration lands in `db/migrations/`, either
+> (a) upload it and flip `AUTO_MIGRATE=true` once (restart), then back to `false`; or
+> (b) import an incremental SQL. Keep the dump / migration set in sync with the code.
 
-### 4.7 Helper scripts — run LOCALLY (no server shell)
+**Alternative — AUTO_MIGRATE on boot** (only if you skip the import): knex runs
+`migrate:latest` at boot against the uploaded `db/migrations`. The DB user has ALL
+PRIVILEGES, so DDL works. Set `false` after the first successful boot.
+
+### 4.7 Admin access (grant-only)
+
+After the schema is imported and the app is running:
+
+1. Register / log in at `https://chooseyour100.com` with
+   **`beakaltigabu29@gmail.com`** (name: **beakal**).
+2. In phpMyAdmin (`chooseyo_the100_prod`), run **`db/grant-admin.sql`**
+   (`INSERT IGNORE INTO admins …` — safe to re-run).
+3. The app derives admin rights from the `admins` table, so `/admin` works immediately.
+
+### 4.8 Helper scripts — run LOCALLY (no server shell)
 
 The webhook/command scripts just hit public APIs, so run them **on your machine**
 with production env values in `server/.env`:
@@ -273,6 +304,10 @@ works automatically. Run **one** instance only (in-memory rate limits/lockout).
 cd client
 VITE_API_URL=https://api.chooseyour100.com npm run build
 ```
+
+> ⚠️ A production build **requires** `VITE_API_URL` — the build now **fails loudly**
+> if it's missing (a build without it silently compiles `API_BASE=''`, sending all
+> `/api/*` calls to the static SPA origin → 404).
 
 - `client/src/api/client.js` prepends `VITE_API_URL` to all `/api/*` calls
   (empty in dev → the Vite proxy `:5173 → :4000` still works).
@@ -316,23 +351,32 @@ RewriteRule . index.html [L]
 
 ### 7.1 Google OAuth
 1. [Google Cloud Console](https://console.cloud.google.com) → project → OAuth consent
-   screen (External) → add/keep your users.
+   screen (External) → add/keep your users, and **Publish** the app so real users can
+   sign in (or keep it in Testing and add them as test users).
 2. Credentials → OAuth client ID (Web application) → **Authorized redirect URIs** add:
    `https://api.chooseyour100.com/api/auth/google/callback`
+   (keep the dev `http://localhost:4000/api/auth/google/callback` if you still develop).
 3. Set `GOOGLE_REDIRECT_URI` to that exact URI (no trailing slash).
 4. Restart the backend.
+5. Scope is `openid email profile` (already set in `server/src/services/googleAuth.js`).
 
-**Test:** on the SPA → `/login` → Continue with Google → returns to dashboard.
+**Test:** on the SPA → `/login` → Continue with Google → returns to dashboard
+(round-trip lands back on `https://chooseyour100.com`).
 
 ### 7.2 Strava
 1. developers.strava.com → your app → set **Authorization callback domain** to
    `api.chooseyour100.com`.
 2. `STRAVA_REDIRECT_URI=https://api.chooseyour100.com/api/integrations/strava/callback`.
-3. Subscribe to webhooks (run locally, §4.7) →
+3. **OAuth scope is `activity:read_all`** (`server/src/services/strava.js`) so all of a
+   member's activities (incl. private) import and webhook events cover them. If the
+   app was authorized with an older scope, have the member **disconnect + reconnect**.
+4. Subscribe to webhooks (run locally, §4.7) →
    `https://api.chooseyour100.com/api/webhooks/strava`.
+   ⚠️ **Public DNS must be live first** — Strava's servers reach the callback URL via
+   public DNS, so a local hosts-file override does not help here. Wait for propagation.
 
-**Test:** `/profile` → CONNECT STRAVA → authorize → returns connected; a run syncs
-(post-launch).
+**Test:** `/profile` → CONNECT STRAVA → authorize (`read_all`) → returns connected;
+a run syncs (post-launch).
 
 ### 7.3 Telegram
 1. Reuse the bot (`TELEGRAM_BOT_TOKEN`, `the100days_bot`).
@@ -414,7 +458,11 @@ Run against production.
 | Backend won't start in prod | Missing/invalid `JWT_SECRET`, `ENCRYPTION_KEY`, HTTPS `CLIENT_ORIGIN`/`BASE_URL`, `COOKIE_SECURE=true`. |
 | `Cannot find module bcrypt` | Native `bcrypt` still installed — switch to `bcryptjs` (§4.1), reinstall, re-upload. |
 | Migrations didn't run | `AUTO_MIGRATE` not `true`, `db/migrations` missing at `<app-root>/db/migrations`, or DB user lacks DDL. |
+| `api.…` returns **502 Bad Gateway** | The Node process is stopped or crashed at boot. Check the app **status + Logs**: ensure `src/config.js` (env-path dotenv fix) and `db/migrations` are uploaded, the DB/user/grant exist, then restart. Expect `[migrate] done` → `THE 100 API listening on http://localhost:<port>`. |
 | SPA can't reach API (CORS) | `CLIENT_ORIGIN` wrong; or the SPA build used a stale `VITE_API_URL`. |
+| `/api/*` calls 404 on the SPA origin | The deployed `client/dist` was built **without** `VITE_API_URL` → rebuild with `VITE_API_URL=https://api.chooseyour100.com npm run build` and re-upload. |
+| `blob:` script CSP violations in console | Browser-extension noise — the strict `script-src 'self'` is working as intended; the app is fine. Do **not** add `blob:` to `script-src`. |
+| Login "doesn't stick" over `http://` | Cookies are `Secure` — must test over **HTTPS** (requires DNS propagation + AutoSSL). |
 | Login cookie not sent | Hosts on different top-level domains; must be same registrable domain (`…com` + `api.…com`). |
 | CSP blocks API calls | `connect-src` in `vite.config.js` missing the API origin → rebuild + re-upload SPA. |
 | Google login fails at redirect | `GOOGLE_REDIRECT_URI` must match the console URI exactly (no trailing slash). |

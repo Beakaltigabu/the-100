@@ -2,7 +2,7 @@ const db = require('../db');
 const strava = require('./strava');
 const { importStravaActivity } = require('./stravaImport');
 const stravaRateLimit = require('./stravaRateLimit');
-const { getActiveChallenge, hasChallengeStarted } = require('./challengeWindow');
+const { getActiveChallenge } = require('./challengeWindow');
 const { decrypt } = require('../lib/crypto');
 
 // Returns a valid (non-expired) access token for a connection, refreshing if needed.
@@ -28,50 +28,83 @@ async function getValidAccessToken(conn) {
   return decrypt(encrypted.encrypted_access_token);
 }
 
-// One-time backfill of a member's recent activities (used after Strava connects,
-// whether via CONNECT STRAVA or via Strava sign-in). Rate-limited and deduped.
-async function backfillRecent(userId) {
+// Sync a member's Strava activities into THE 100. The cutoff defaults to the
+// start of the last sync day — or, on first sync, the day they connected — so
+// syncing starts from the day they connect. Rate-limited and deduped.
+// Returns { imported, total, rateLimited }.
+async function syncStrava(userId, { after } = {}) {
   const conn = await db('strava_connections').where({ user_id: userId }).first();
-  if (!conn || conn.status !== 'connected') return;
-
-  // Don't sync anything before the challenge launches.
-  const challenge = await getActiveChallenge();
-  if (!hasChallengeStarted(challenge)) {
-    console.log('Strava backfill skipped (challenge not started)');
-    return;
-  }
+  if (!conn || conn.status !== 'connected') return { imported: 0, total: 0, rateLimited: false };
 
   const enrollment = await db('enrollments')
     .join('challenges', 'challenges.id', 'enrollments.challenge_id')
     .where({ 'enrollments.user_id': userId, 'challenges.is_active': true })
+    .select('enrollments.*')
     .first();
-  if (!enrollment) return;
+  if (!enrollment) return { imported: 0, total: 0, rateLimited: false };
+
+  if (!after) {
+    const from = conn.last_synced_at || conn.connected_at;
+    const d = from ? new Date(from) : new Date();
+    d.setHours(0, 0, 0, 0);
+    after = Math.floor(d.getTime() / 1000);
+    // Never go before the connection day.
+    if (conn.connected_at) {
+      const connStart = new Date(conn.connected_at);
+      connStart.setHours(0, 0, 0, 0);
+      const connSec = Math.floor(connStart.getTime() / 1000);
+      if (after < connSec) after = connSec;
+    }
+  }
 
   const accessToken = await getValidAccessToken(conn);
-  if (!accessToken) return;
+  if (!accessToken) return { imported: 0, total: 0, rateLimited: false };
 
-  const after = Math.floor(Date.now() / 1000) - 14 * 24 * 60 * 60; // last 14 days
   try {
-    const activities = await strava.fetchRecentActivities(accessToken, { after, perPage: 50 });
+    const challenge = await getActiveChallenge();
+    const perPage = 50;
+    const activities = await strava.fetchRecentActivities(accessToken, { after, perPage });
     let imported = 0;
+    const fetchedIds = activities.map((a) => a.id);
     for (const a of activities) {
       try {
         const r = await importStravaActivity(enrollment, a, a.id, challenge);
         if (r.imported) imported += 1;
       } catch (err) {
-        if (err instanceof stravaRateLimit.RateLimitedError) break;
-        console.error('Strava backfill import error:', err.message);
+        if (err instanceof stravaRateLimit.RateLimitedError) {
+          return { imported, total: activities.length, rateLimited: true };
+        }
+        console.error('Strava sync import error:', err.message);
       }
     }
+
+    // Reconcile deletions: if the fetch returned the full set (not truncated by
+    // pagination), remove imported rows in this window that no longer exist on
+    // Strava (the webhook covers this on prod; this is the safety net + local).
+    if (activities.length < perPage) {
+      const cutoffDate = new Date(after * 1000).toISOString().slice(0, 10);
+      await db('challenge_activities')
+        .where({ enrollment_id: enrollment.id, source: 'strava' })
+        .where('date', '>=', cutoffDate)
+        .whereNotIn('strava_activity_id', fetchedIds.length ? fetchedIds : [0])
+        .del();
+    }
+
     await db('strava_connections').where({ user_id: userId }).update({ last_synced_at: db.fn.now() });
-    console.log(`Strava backfill: imported ${imported} activities for user ${userId}`);
+    return { imported, total: activities.length, rateLimited: false };
   } catch (err) {
     if (err instanceof stravaRateLimit.RateLimitedError) {
-      console.log('Strava backfill deferred (rate limited)');
-      return;
+      return { imported: 0, total: 0, rateLimited: true };
     }
     throw err;
   }
 }
 
-module.exports = { getValidAccessToken, backfillRecent };
+// One-time backfill after Strava connects (uses the connection-day cutoff).
+async function backfillRecent(userId) {
+  const result = await syncStrava(userId);
+  console.log(`Strava backfill: imported ${result.imported} activities for user ${userId}`);
+  return result;
+}
+
+module.exports = { getValidAccessToken, syncStrava, backfillRecent };

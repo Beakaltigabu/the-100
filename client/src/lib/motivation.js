@@ -20,3 +20,7 @@ export function motivationLabelKey(key) {
 export function motivationGuidanceKey(key) {
   return 'motivationGuidance' + key[0].toUpperCase() + key.slice(1);
 }
+
+export function motivationPhraseKey(key) {
+  return 'motivationPhrase' + key[0].toUpperCase() + key.slice(1);
+}

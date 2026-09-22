@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import './Navigation.css';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -27,10 +27,10 @@ function ThemeToggle() {
 }
 
 export default function Navigation() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { t } = useLanguage();
-  const navigate = useNavigate();
-  const standalone = useStandalone();
+  const location = useLocation();
+  useStandalone(); // applies the `is-standalone` class for PWA bottom-padding
 
   const memberItems = [
     { to: '/dashboard', key: 'home', icon: HomeIcon },
@@ -39,6 +39,9 @@ export default function Navigation() {
   ];
 
   const brandTo = user ? '/dashboard' : '/';
+
+  // The Login button is only shown on the landing page and only for guests.
+  const showLogin = !user && location.pathname === '/';
 
   return (
     <>
@@ -68,23 +71,19 @@ export default function Navigation() {
               <ShieldIcon size={16} />
             </NavLink>
           ) : null}
-          {user ? (
-            <Button variant="ghost" size="sm" onClick={() => logout().then(() => navigate('/'))}>
-              {t('logout')}
-            </Button>
-          ) : (
+          {showLogin ? (
             <NavLink to="/login">
               <Button variant="primary" size="sm">
                 {t('login')}
               </Button>
             </NavLink>
-          )}
+          ) : null}
           <LanguageToggle />
           <ThemeToggle />
         </div>
       </header>
 
-      {user && standalone ? (
+      {user ? (
         <nav className="bottomnav">
           {memberItems.map((item) => (
             <NavLink

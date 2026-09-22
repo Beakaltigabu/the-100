@@ -71,7 +71,12 @@ router.get(
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
-    const activity = await db('challenge_activities').where({ id: req.params.id }).first();
+    // Ownership check: the activity must belong to an enrollment of the caller.
+    const activity = await db('challenge_activities')
+      .join('enrollments', 'enrollments.id', 'challenge_activities.enrollment_id')
+      .where({ 'challenge_activities.id': req.params.id, 'enrollments.user_id': req.user.id })
+      .select('challenge_activities.id', 'challenge_activities.source')
+      .first();
     if (!activity) {
       throw new AppError('Activity not found', 404);
     }

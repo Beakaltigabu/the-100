@@ -1,5 +1,6 @@
 const db = require('../db');
 const { STRAVA_IMPORT_TYPES } = require('../constants');
+const { todayISO } = require('../lib/dates');
 
 // Map a Strava activity type to an app type, or null if unsupported.
 function mapStravaType(type) {
@@ -32,8 +33,13 @@ async function importStravaActivity(enrollment, activity, objectId, challenge) {
   if (!date) {
     return { imported: false, reason: 'no-date' };
   }
-  if (challenge && (date < challenge.start_date || date > challenge.end_date)) {
-    return { imported: false, reason: 'out-of-window' };
+  // Logging is enabled from today even before the official start; the lower
+  // bound opens to today, end_date stays the hard cap.
+  if (challenge) {
+    const lower = todayISO() < challenge.start_date ? todayISO() : challenge.start_date;
+    if (date < lower || date > challenge.end_date) {
+      return { imported: false, reason: 'out-of-window' };
+    }
   }
 
   const payload = {

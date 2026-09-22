@@ -8,7 +8,9 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.text-field--icon .text-field__input {
+/* Higher specificity than page-level `.field__input` padding overrides so the
+   icon space is always reserved (auth card, onboarding, etc.). */
+.text-field.text-field--icon .text-field__input {
   padding-left: calc(var(--space-3) + 28px);
 }
 

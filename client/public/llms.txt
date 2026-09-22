@@ -1,0 +1,47 @@
+# THE 100
+
+> THE 100 is a free 100-day personal movement challenge. Choose your goal — running, walking, run + walk, or cycling — commit for 100 days, and finish what you started. It's bilingual (English and Amharic / አማርኛ) with a private community, Strava sync, and a Telegram bot.
+
+## Key facts
+
+- THE 100 is a 100-day commitment challenge, not a race. The only person you compete with is the person you were 100 days ago.
+- Participants choose their own goal distance (from 20 km to 1,000+ km). A beginner finishing 50 km and a runner finishing 1,000 km are equally successful.
+- Supported activities: running, walking, run + walk, and cycling.
+- Progress is logged manually in the app, by Telegram (/checkin), or synced automatically from Strava (runs, rides, walks, and swims).
+- The current challenge runs from September 23, 2026 to December 31, 2026 (100 days).
+- The product is completely free to use.
+- The app and the Telegram bot are fully bilingual in English and Amharic (አማርኛ).
+- Milestones (10, 50, 100 km…) and streaks mark progress along the way.
+- Key motto: "Start where you are. Give 100%. Show up."
+
+## Activity
+
+- Join the challenge: create a free account at chooseyour100.com, choose your activity and weekly volume, pick a goal, and commit.
+- Track via the web app (PWA, installable), the Telegram bot @the100days_bot, or Strava sync.
+- The community runs in a private Telegram group, moderated with bilingual (English/Amharic) messages.
+
+## Telegram bot
+
+- Link your account with a one-tap deep link from the app, then use:
+  - `/status` — your goal, current total, day number, and progress
+  - `/checkin <distance>` — log an activity (e.g. `/checkin 8.4`)
+  - `/day`, `/goal`, `/streaks`, `/language en|am`, `/help`, `/disconnect`
+- The bot sends inactivity nudges, weekly recaps, milestone and finish celebrations, and a daily community digest.
+
+## Links
+
+- [Landing page](https://chooseyour100.com/): Join the challenge, see how it works
+- [Register](https://chooseyour100.com/register): Create a free account
+- [Support](https://chooseyour100.com/support): Contact and help
+- [Privacy & Terms](https://chooseyour100.com/privacy): Privacy policy and terms
+- [Telegram bot](https://t.me/the100days_bot): @the100days_bot
+- [Community group](https://t.me/+pOsJz7n6qEQzMWY8): Private Telegram community
+
+## Questions
+
+- What is THE 100? A free 100-day personal movement challenge where you choose your own goal and commit for 100 days.
+- Is it free? Yes, completely free.
+- What activities count? Running, walking, run + walk, and cycling, logged manually or via Strava.
+- Do I need to be fit? No — you choose your own goal starting from where you are.
+- When does it run? The current challenge starts September 23, 2026 and ends December 31, 2026.
+- Is it available in Amharic? Yes, the app and bot are fully bilingual English / Amharic.

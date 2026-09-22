@@ -1,0 +1,305 @@
+.fi {
+  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+}
+
+.fi__avatar {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: var(--cm-accent);
+  color: #0b0b0b;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 0.9rem;
+}
+
+.fi__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fi__who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fi__name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.fi__member-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fi__member-link:hover {
+  color: var(--color-accent);
+}
+
+.fi__avatar-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.fi__handle {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--cm-muted);
+  overflow-wrap: anywhere;
+}
+
+.fi__sub {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cm-muted);
+  overflow-wrap: anywhere;
+}
+
+.fi__time {
+  margin-left: auto;
+  font-size: 0.74rem;
+  color: var(--cm-muted);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.fi__quote {
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--cm-fg);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.fi__distance {
+  font-size: 0.8rem;
+  color: var(--cm-muted);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.fi__distance strong {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.4rem;
+  color: var(--cm-fg);
+  letter-spacing: -0.02em;
+}
+
+.fi__unit {
+  color: var(--cm-muted);
+  font-weight: 700;
+}
+
+.fi__foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 4px;
+}
+
+.fi__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--cm-muted);
+  font-weight: 700;
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.fi__action:hover {
+  color: var(--cm-fg);
+}
+
+.fi__action.is-cheered {
+  color: var(--cm-accent);
+}
+
+.fi__action--danger {
+  color: #f87171;
+}
+
+.fi__cheer-mark {
+  font-size: 0.9rem;
+}
+
+/* Kicker (milestone / finish / join / announcement) */
+.fi__kicker {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cm-accent);
+}
+
+.fi__big {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.fi__activity {
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cm-accent);
+}
+
+/* Milestone — cinematic with orange vertical accent */
+.fi--milestone {
+  padding-left: 18px;
+}
+
+.fi--milestone .fi__accent {
+  position: absolute;
+  left: 0;
+  top: 20px;
+  bottom: 20px;
+  width: 4px;
+  background: var(--cm-accent);
+}
+
+.fi--milestone .fi__big {
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+.fi--milestone .fi__who {
+  gap: 10px;
+}
+
+.fi--milestone .fi__verb {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--cm-muted);
+}
+
+/* Finish — editorial achievement */
+.fi--finish .fi__finish-name {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.fi--finish .fi__finish-line {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(1rem, 2.4vw, 1.4rem);
+  color: var(--cm-accent);
+}
+
+.fi--finish .fi__finish-stats {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--cm-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Announcement — official, visually distinct */
+.fi--announcement {
+  background: var(--cm-surface);
+  padding: 20px;
+  margin: 4px 0 8px;
+}
+
+.fi__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fi__official {
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cm-accent);
+}
+
+.fi__pin {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cm-accent);
+  border: 1px solid var(--cm-accent);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.fi__title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.15rem;
+  overflow-wrap: anywhere;
+}
+
+.fi__body {
+  color: var(--cm-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Mobile touch targets */
+@media (max-width: 767px) {
+  .fi {
+    padding: 18px 0;
+    gap: 10px;
+  }
+
+  .fi__action {
+    min-height: 40px;
+    padding: 6px 8px;
+    margin-left: -8px;
+    font-size: 0.74rem;
+  }
+
+  .fi--milestone .fi__big {
+    font-size: clamp(1.7rem, 8vw, 2.2rem);
+  }
+
+  .fi__avatar {
+    width: 36px;
+    height: 36px;
+  }
+}

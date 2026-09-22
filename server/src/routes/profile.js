@@ -9,24 +9,39 @@ const { unitForActivity } = require('../constants');
 const { todayISO, diffDays } = require('../lib/dates');
 const config = require('../config');
 const { sanitizeName } = require('../lib/sanitize');
+const { getActiveChallenge } = require('../services/challengeWindow');
 
 const router = express.Router();
 
 router.use(requireAuth);
+
+const MOTIVATIONS = [
+  'health',
+  'energy',
+  'stress',
+  'challenge',
+  'community',
+  'fitness',
+  'weight',
+  'sleep',
+  'mind',
+  'discipline'
+];
 
 const profileSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   location: z.string().max(120).nullable().optional(),
   age: z.number().int().min(13).max(120).nullable().optional(),
   social_handle: z.string().max(120).nullable().optional(),
-  language: z.enum(['en', 'am']).optional()
+  language: z.enum(['en', 'am']).optional(),
+  motivation: z.array(z.enum(MOTIVATIONS)).min(1).max(3).optional()
 });
 
 router.get(
   '/',
   asyncHandler(async (req, res) => {
     const user = req.user;
-    const challenge = await db('challenges').where({ is_active: true }).orderBy('id', 'desc').first();
+    const challenge = await getActiveChallenge();
     const enrollment = challenge
       ? await db('enrollments').where({ user_id: user.id, challenge_id: challenge.id }).first()
       : null;
@@ -98,6 +113,9 @@ router.put(
     if (parsed.data.age !== undefined) updates.age = parsed.data.age;
     if (parsed.data.social_handle !== undefined) updates.social_handle = parsed.data.social_handle || null;
     if (parsed.data.language !== undefined) updates.language = parsed.data.language;
+    if (parsed.data.motivation !== undefined) {
+      updates.motivation = parsed.data.motivation.length ? parsed.data.motivation.join(',') : null;
+    }
     updates.updated_at = db.fn.now();
 
     await db('users').where({ id: req.user.id }).update(updates);

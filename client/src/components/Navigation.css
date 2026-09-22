@@ -95,18 +95,32 @@
   }
 }
 
-/* ── Bottom nav (mobile) ──────────────────────────── */
+/* ── Bottom nav (mobile + PWA only) ────────────────── */
 .bottomnav {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 100;
-  display: flex;
+  /* Hidden by default (desktop web). Shown for small screens and installed
+     PWA windows below. */
+  display: none;
   background: var(--card-bg);
   border-top: 1px solid var(--color-line);
   height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Small screens (mobile) */
+@media (max-width: 767px) {
+  .bottomnav {
+    display: flex;
+  }
+}
+
+/* Installed PWA (standalone window) — regardless of width */
+.is-standalone .bottomnav {
+  display: flex;
 }
 
 .bottomnav__item {

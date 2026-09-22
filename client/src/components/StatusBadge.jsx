@@ -6,6 +6,7 @@ const STATUS_KEY = {
   falling_behind: 'fallingBehind',
   inactive: 'inactive',
   completed: 'completed',
+  not_started: 'notStarted',
   connected: 'connected',
   not_connected: 'notConnected'
 };

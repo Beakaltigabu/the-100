@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
 import StatusBadge from '../../components/StatusBadge';
-import { LoadingState, ErrorState } from '../../components/States';
+import { ErrorState } from '../../components/States';
+import PageSkeleton from '../../components/PageSkeleton';
+import AdminNav from './AdminNav';
+import { activityLabelKey } from '../../lib/activity';
 import './Admin.css';
 
 export default function AdminMemberDetail() {
@@ -24,7 +27,7 @@ export default function AdminMemberDetail() {
 
   useEffect(load, [load]);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <PageSkeleton variant="admin" />;
   if (error) return <ErrorState message={error} onRetry={load} />;
   if (!data) return null;
 
@@ -32,11 +35,9 @@ export default function AdminMemberDetail() {
 
   return (
     <div className="admin page page--full">
+      <AdminNav />
       <div className="admin__head">
         <h1 className="admin__title">{user.name}</h1>
-        <Link to="/admin/members">
-          <button className="btn btn--secondary btn--md">{t('back')}</button>
-        </Link>
       </div>
 
       <div className="admin__detail">
@@ -77,10 +78,10 @@ export default function AdminMemberDetail() {
                 <div key={a.id} className="activity-row">
                   <div className="activity-row__body">
                     <div className="activity-row__distance">
-                      {a.quantity} {t(a.activityType === 'resistance' ? 'sessions' : 'km')}
+                      {a.quantity} {t(a.activity_type === 'resistance' ? 'sessions' : 'km')}
                     </div>
                     <div className="activity-row__type">
-                      {a.date} · {t(a.activityType)} · {a.source}
+                      {a.date} · {t(activityLabelKey(a.activity_type))} · {a.source}
                     </div>
                   </div>
                 </div>

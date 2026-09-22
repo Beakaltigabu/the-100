@@ -27,6 +27,21 @@ body {
   flex-direction: column;
 }
 
+/* The app content area grows to fill the space between the topbar and the
+   footer, so the footer stays at the bottom even while a page is loading and
+   short loading states never push it toward the top. */
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+
+.app-main > .state {
+  flex: 1;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -36,6 +51,7 @@ a {
 
 button {
   font-family: inherit;
+  color: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
@@ -73,6 +89,14 @@ p {
 
 .is-standalone .page {
   padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + var(--space-6));
+}
+
+/* The mobile bottom nav shows for all signed-in users (not only installed PWAs),
+   so give .page content room above the fixed nav on small screens. */
+@media (max-width: 899px) {
+  .page {
+    padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + var(--space-6));
+  }
 }
 
 .page--full {

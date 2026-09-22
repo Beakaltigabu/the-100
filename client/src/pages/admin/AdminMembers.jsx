@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
 import StatusBadge from '../../components/StatusBadge';
-import { LoadingState, ErrorState, EmptyState } from '../../components/States';
+import { ErrorState, EmptyState } from '../../components/States';
+import PageSkeleton from '../../components/PageSkeleton';
+import AdminNav from './AdminNav';
 import './Admin.css';
 
 function formatDate(iso) {
@@ -28,16 +30,14 @@ export default function AdminMembers() {
 
   useEffect(load, [load]);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <PageSkeleton variant="admin" />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
   return (
     <div className="admin page page--full">
+      <AdminNav />
       <div className="admin__head">
         <h1 className="admin__title">{t('adminMembers')}</h1>
-        <Link to="/admin">
-          <button className="btn btn--secondary btn--md">{t('back')}</button>
-        </Link>
       </div>
 
       {members.length === 0 ? (

@@ -52,7 +52,7 @@ function recommendGoals(activityType, baseline) {
   if (base < 10) return [50, 100, 250, 500];
   if (base < 20) return [100, 250, 500, 1000];
   if (base < 40) return [250, 500, 750, 1000];
-  return [250, 500, 1000, 1000];
+  return [500, 750, 1000, 1500];
 }
 
 function milestonesForActivity(activityType) {

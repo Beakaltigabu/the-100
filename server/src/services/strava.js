@@ -9,7 +9,9 @@ function configured() {
   return !!(config.strava.clientId && config.strava.clientSecret && config.strava.redirectUri);
 }
 
-function authorizeUrl(state, scope = 'activity:read', redirectUri = config.strava.redirectUri) {
+// read_all is required so the app can import all of a member's activities
+// (including private ones) and receive webhook events covering them.
+function authorizeUrl(state, scope = 'activity:read_all', redirectUri = config.strava.redirectUri) {
   const qs = new URLSearchParams({
     client_id: config.strava.clientId,
     response_type: 'code',

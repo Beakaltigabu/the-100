@@ -43,3 +43,8 @@
   color: var(--color-muted);
   margin-top: var(--space-2);
 }
+
+.connect-prompt__link {
+  color: var(--color-accent);
+  font-weight: 700;
+}

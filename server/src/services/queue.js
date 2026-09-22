@@ -1,6 +1,14 @@
-const { RateLimitedError } = require('./stravaRateLimit');
-
+// Generic FIFO that serializes outbound Telegram (and webhook) work. Jobs retry
+// up to `maxAttempts` times with exponential backoff on ANY error — a transient
+// network blip must not permanently drop a DM or broadcast. Webhook-processing
+// jobs that write to the DB should stay at maxAttempts 1 (no retry) to avoid
+// double-processing.
 const listeners = [];
+
+// Hard cap on queued work (including delayed retries) — an unbounded in-memory
+// queue would grow without limit if Telegram/Strava stay down for hours.
+const MAX_BACKLOG = 5000;
+let pending = 0;
 
 function push(task) {
   if (task.delay > 0) {
@@ -15,6 +23,11 @@ function push(task) {
 }
 
 function enqueue(job, opts = {}) {
+  if (pending >= MAX_BACKLOG) {
+    console.error(`Queue backlog full (${MAX_BACKLOG}) — dropping job`);
+    return false;
+  }
+  pending += 1;
   push({
     job,
     attempts: 0,
@@ -22,6 +35,7 @@ function enqueue(job, opts = {}) {
     baseDelay: opts.delay ?? 0,
     delay: opts.delay ?? 0
   });
+  return true;
 }
 
 let processing = false;
@@ -30,12 +44,14 @@ async function processJob() {
   processing = true;
   while (listeners.length) {
     const task = listeners.shift();
+    pending -= 1;
     try {
       await task.job();
     } catch (err) {
       task.attempts += 1;
-      if (err instanceof RateLimitedError && task.attempts < task.maxAttempts) {
+      if (task.attempts < task.maxAttempts) {
         task.delay = task.baseDelay * Math.pow(2, task.attempts);
+        pending += 1; // re-queued for a delayed retry — keep the backlog count honest
         push(task);
       } else {
         console.error('Queue job error:', err.message);
@@ -45,4 +61,8 @@ async function processJob() {
   processing = false;
 }
 
-module.exports = { enqueue };
+function backlog() {
+  return pending;
+}
+
+module.exports = { enqueue, backlog, MAX_BACKLOG };

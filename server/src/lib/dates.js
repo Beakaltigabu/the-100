@@ -1,9 +1,28 @@
+// The app's canonical timezone. Challenge "day", weekly boundaries, and the
+// daily digest all align to this zone (defaults to Ethiopia, UTC+3).
+const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Africa/Addis_Ababa';
+
 function toDateISO(d) {
   return d.toISOString().slice(0, 10);
 }
 
 function todayISO() {
-  return toDateISO(new Date());
+  // Local date in APP_TIMEZONE, e.g. "2026-09-21". 'en-CA' yields YYYY-MM-DD.
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  let y = '';
+  let m = '';
+  let d = '';
+  for (const p of fmt.formatToParts(new Date())) {
+    if (p.type === 'year') y = p.value;
+    else if (p.type === 'month') m = p.value;
+    else if (p.type === 'day') d = p.value;
+  }
+  return `${y}-${m}-${d}`;
 }
 
 function addDays(iso, days) {
@@ -37,4 +56,4 @@ function startOfWeekForDate(d) {
   return startOfWeek(toDateISO(d));
 }
 
-module.exports = { toDateISO, todayISO, addDays, addDaysISO, diffDays, startOfWeek, startOfWeekForDate };
+module.exports = { APP_TIMEZONE, toDateISO, todayISO, addDays, addDaysISO, diffDays, startOfWeek, startOfWeekForDate };

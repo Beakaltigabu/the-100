@@ -1,5 +1,5 @@
-const CHALLENGE_START = '2026-09-21';
-const CHALLENGE_END = '2026-12-29';
+const CHALLENGE_START = '2026-09-23';
+const CHALLENGE_END = '2026-12-31';
 
 exports.up = async function up(knex) {
   await knex('challenges')

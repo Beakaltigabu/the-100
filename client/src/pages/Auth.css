@@ -12,7 +12,7 @@
   border: 1px solid var(--color-line);
   border-radius: var(--radius);
   padding: var(--space-6);
-  box-shadow: var(--shadow);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -75,10 +75,91 @@
   border: none;
   padding: 0;
   color: var(--color-accent);
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: opacity 0.15s ease;
+}
+
+/* ── Premium editorial controls (auth card only) ──── */
+.auth-card .field {
+  gap: 8px;
+}
+
+.auth-card .field__label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--as-muted, var(--color-muted));
+}
+
+.auth-card .field__input {
+  padding: 13px 14px;
+  background: var(--as-input, var(--input-bg));
+  border: 1px solid var(--as-border, var(--color-line));
+  border-radius: 0;
+  color: var(--as-fg, var(--fg));
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.auth-card .field__input:focus {
+  border-color: var(--as-accent, var(--color-accent));
+  box-shadow: none;
+}
+
+.auth-card .field__input::placeholder {
+  color: var(--as-muted, var(--color-muted));
+  opacity: 0.7;
+}
+
+.auth-card .field__hint {
+  font-size: 0.75rem;
+  color: var(--color-danger);
+}
+
+.auth-card .oauth__btn {
+  border-radius: 0;
+  background: var(--as-surface, var(--card-bg));
+  border-color: var(--as-border, var(--color-line));
+}
+
+.auth-card .auth-card__switch {
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--color-muted);
+}
+
+.auth-card .auth-card__switch a {
+  color: var(--color-accent);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.auth-card__note--warn {
+  color: var(--color-warning);
+  font-weight: 700;
+}
+
+.auth-card .auth-terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: var(--as-muted, var(--color-muted));
+  line-height: 1.4;
+}
+
+.auth-card .auth-terms input {
+  margin-top: 2px;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
 }
 
 .auth-card__link:hover {

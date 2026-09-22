@@ -25,11 +25,13 @@ describe('timingSafeEqualStr', () => {
 
 describe('validateConfig', () => {
   const good = {
-    JWT_SECRET: 'a-strong-secret-123',
+    JWT_SECRET: 's'.repeat(32),
     ENCRYPTION_KEY: 'x'.repeat(64),
+    DB_PASSWORD: 'db-secret',
     CLIENT_ORIGIN: 'https://app.example.com',
     BASE_URL: 'https://api.example.com',
-    COOKIE_SECURE: 'true'
+    COOKIE_SECURE: 'true',
+    TELEGRAM_BOT_TOKEN: '123456789:AA-test-token'
   };
 
   it('accepts a fully-configured production env', () => {
@@ -44,6 +46,21 @@ describe('validateConfig', () => {
   it('rejects a missing ENCRYPTION_KEY', () => {
     const errors = validateConfig({ ...good, ENCRYPTION_KEY: '' });
     expect(errors.some((e) => e.includes('ENCRYPTION_KEY'))).toBe(true);
+  });
+
+  it('rejects a short JWT_SECRET', () => {
+    const errors = validateConfig({ ...good, JWT_SECRET: 'a-strong-secret-123' });
+    expect(errors.some((e) => e.includes('JWT_SECRET'))).toBe(true);
+  });
+
+  it('rejects a short ENCRYPTION_KEY', () => {
+    const errors = validateConfig({ ...good, ENCRYPTION_KEY: 'too-short' });
+    expect(errors.some((e) => e.includes('ENCRYPTION_KEY'))).toBe(true);
+  });
+
+  it('rejects an empty DB_PASSWORD in production', () => {
+    const errors = validateConfig({ ...good, DB_PASSWORD: '' });
+    expect(errors.some((e) => e.includes('DB_PASSWORD'))).toBe(true);
   });
 
   it('rejects non-https client origin', () => {

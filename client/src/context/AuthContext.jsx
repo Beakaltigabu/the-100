@@ -1,11 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api } from '../api/client';
+import { api, setUnauthorizedHandler } from '../api/client';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Mid-session expiry (e.g. token version bumped by a password reset): clear
+  // the user so ProtectedRoute bounces to /login instead of looping on toasts.
+  useEffect(() => {
+    setUnauthorizedHandler(() => setUser(null));
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -39,6 +46,13 @@ export function AuthProvider({ children }) {
       await api.post('/api/auth/logout');
     } catch {
       // still clear the local session even if the server call fails
+    }
+    // Drop the onboarding draft so a different account (or a re-registration
+    // after deletion) never inherits the previous user's answers/goal.
+    try {
+      localStorage.removeItem('the100_draft');
+    } catch {
+      // localStorage unavailable — nothing to clear
     }
     setUser(null);
   }, []);

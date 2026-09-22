@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
+import { usePageMeta } from '../hooks/usePageMeta';
 import AuthShell from '../components/AuthShell';
 import TextField from '../components/TextField';
 import SubmitButton from '../components/SubmitButton';
@@ -11,6 +12,7 @@ import './Auth.css';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ForgotPassword() {
+  usePageMeta({ title: 'Forgot password', path: '/forgot-password', index: false });
   const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);

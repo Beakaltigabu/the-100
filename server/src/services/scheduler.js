@@ -4,7 +4,11 @@ const { createNotification } = require('./notifications');
 const { unitForActivity, UNIT_LABEL } = require('../constants');
 const telegramMessenger = require('./telegramMessenger');
 const botMessages = require('./botMessages');
+const { getMeta, setMeta } = require('./meta');
+const { logEvent } = require('./logger');
 
+// Fast path for the once-per-day digest guard (persisted in the `meta` table so
+// a restart can't double-send the daily digest).
 let lastDigestDay = null;
 
 async function totalsByEnrollment(enrollmentIds) {
@@ -42,27 +46,42 @@ async function recentlyNotifiedUserIds(type, withinDays, userIds) {
   return new Set(rows.map((r) => r.user_id));
 }
 
+// Batch-fetch user names/languages once — avoids a query per member in loops.
+async function usersById(userIds) {
+  if (!userIds.length) return {};
+  const rows = await db('users').whereIn('id', userIds).select('id', 'name', 'language');
+  const out = {};
+  for (const r of rows) out[r.id] = r;
+  return out;
+}
+
 async function checkFinishers() {
   const enrollments = await db('enrollments').whereIn('status', ['committed', 'active']);
   if (!enrollments.length) return;
 
   const totals = await totalsByEnrollment(enrollments.map((e) => e.id));
-  for (const e of enrollments) {
-    const total = totals[e.id] || 0;
-    if (total >= Number(e.goal_value)) {
-      await db('enrollments').where({ id: e.id }).update({ status: 'completed', completed_at: db.fn.now() });
-      const unitLabel = UNIT_LABEL[unitForActivity(e.activity_type)] || 'KM';
-      await createNotification({
-        userId: e.user_id,
-        type: 'finish',
-        title: 'YOU DID IT.',
-        body: `You reached ${e.goal_value} ${unitLabel}. You finished what you started.`
-      });
-      const user = await db('users').where({ id: e.user_id }).first();
-      const lang = await telegramMessenger.getUserLanguage(e.user_id);
-      telegramMessenger.sendToUser(e.user_id, botMessages.finish(lang, e.goal_value, unitLabel));
-      telegramMessenger.broadcastFinish(user ? user.name : 'Member', e.goal_value, unitLabel);
-    }
+  const finishers = enrollments.filter((e) => (totals[e.id] || 0) >= Number(e.goal_value));
+  if (!finishers.length) return;
+
+  const users = await usersById(finishers.map((e) => e.user_id));
+  for (const e of finishers) {
+    // Atomic conditional flip: progressEvents (on every logged activity) can
+    // race this job — only the caller that changes the row announces the finish.
+    const flipped = await db('enrollments')
+      .where({ id: e.id })
+      .whereIn('status', ['committed', 'active'])
+      .update({ status: 'completed', completed_at: db.fn.now() });
+    if (flipped !== 1) continue;
+    const unitLabel = UNIT_LABEL[unitForActivity(e.activity_type)] || 'KM';
+    await createNotification({
+      userId: e.user_id,
+      type: 'finish',
+      title: 'YOU DID IT.',
+      body: `You reached ${e.goal_value} ${unitLabel}. You finished what you started.`
+    });
+    const user = users[e.user_id];
+    telegramMessenger.sendToUser(e.user_id, botMessages.finish((user && user.language) || 'en', e.goal_value, unitLabel));
+    telegramMessenger.broadcastFinish(user ? user.name : 'Member', e.goal_value, unitLabel);
   }
 }
 
@@ -79,16 +98,19 @@ async function checkInactivity() {
   if (!candidates.length) return;
 
   const already = await recentlyNotifiedUserIds('inactivity', 7, candidates.map((e) => e.user_id));
+  const users = await usersById(candidates.map((e) => e.user_id));
   for (const e of candidates) {
     if (already.has(e.user_id)) continue;
-    const daysSince = lastDates[e.id] ? diffDays(lastDates[e.id], todayISO()) : 999;
+    // `null` when the member has never logged anything — the message renders a
+    // friendly "haven't logged yet" phrase instead of a fake number.
+    const daysSince = lastDates[e.id] ? diffDays(lastDates[e.id], todayISO()) : null;
     await createNotification({
       userId: e.user_id,
       type: 'inactivity',
       title: "You haven't checked in recently.",
       body: 'Your 100 is still waiting. Keep moving.'
     });
-    const lang = await telegramMessenger.getUserLanguage(e.user_id);
+    const lang = (users[e.user_id] && users[e.user_id].language) || 'en';
     telegramMessenger.sendToUser(e.user_id, botMessages.inactivity(lang, daysSince));
   }
 }
@@ -102,6 +124,7 @@ async function checkWeekly() {
 
   const totals = await totalsByEnrollment(enrollments.map((e) => e.id));
   const already = await recentlyNotifiedUserIds('weekly_checkin', 6, enrollments.map((e) => e.user_id));
+  const users = await usersById(enrollments.map((e) => e.user_id));
   for (const e of enrollments) {
     if (already.has(e.user_id)) continue;
     await createNotification({
@@ -112,15 +135,17 @@ async function checkWeekly() {
     });
     const total = totals[e.id] || 0;
     const unitLabel = UNIT_LABEL[unitForActivity(e.activity_type)] || 'KM';
-    const lang = await telegramMessenger.getUserLanguage(e.user_id);
+    const lang = (users[e.user_id] && users[e.user_id].language) || 'en';
     telegramMessenger.sendToUser(e.user_id, botMessages.weeklyCheckin(lang, total, e.goal_value, unitLabel));
   }
 }
 
 async function sendDailyDigest() {
   const today = todayISO();
+  if (!lastDigestDay) {
+    lastDigestDay = await getMeta('digest_day'); // survives restarts
+  }
   if (lastDigestDay === today) return; // once per day
-  lastDigestDay = today;
 
   const checkedInToday = await db('challenge_activities')
     .where({ date: today })
@@ -138,16 +163,95 @@ async function sendDailyDigest() {
     Number(milestonesThisWeek.c),
     Number(finishers.c)
   );
+
+  lastDigestDay = today;
+  await setMeta('digest_day', today);
 }
 
+// Expire invite tokens that were generated but never completed via /start.
+async function pruneStaleInvites() {
+  const result = await db('telegram_connections')
+    .where({ state: 'invite_generated' })
+    .where('link_expires_at', '<', new Date())
+    .update({
+      state: 'not_connected',
+      link_token_hash: null,
+      link_expires_at: null,
+      updated_at: db.fn.now()
+    });
+  if (result > 0) {
+    console.log(`[scheduler] pruned ${result} expired Telegram invite(s)`);
+  }
+}
+
+const JOBS = [checkFinishers, checkInactivity, checkWeekly, sendDailyDigest, pruneStaleInvites, pruneLogs];
+
+// Overlap guard: a slow cycle (large member base) must never interleave with
+// the next interval tick — that would duplicate broadcasts/notifications.
+let jobCycleRunning = false;
+
 async function runScheduledJobs() {
+  if (jobCycleRunning) return;
+  jobCycleRunning = true;
+  const startedAt = Date.now();
   try {
-    await checkFinishers();
-    await checkInactivity();
-    await checkWeekly();
-    await sendDailyDigest();
-  } catch (err) {
-    console.error('Scheduler error:', err.message);
+    // Each job is isolated: one failure must not abort the rest of the cycle.
+    for (const job of JOBS) {
+      try {
+        await job();
+      } catch (err) {
+        console.error(`Scheduler job ${job.name} failed:`, err.message);
+        logEvent({
+          source: 'scheduler',
+          type: 'job_error',
+          message: `${job.name} failed: ${err.message}`,
+          meta: { job: job.name }
+        });
+      }
+    }
+    logEvent({
+      source: 'scheduler',
+      type: 'run',
+      message: `scheduled jobs completed in ${Date.now() - startedAt}ms`,
+      meta: { durationMs: Date.now() - startedAt }
+    });
+  } finally {
+    jobCycleRunning = false;
+  }
+}
+
+// Delete old log rows and enforce a hard cap so request/error/event tables
+// can't grow without bound. Runs once per day (tracked in the meta table).
+async function pruneLogs() {
+  const day = todayISO();
+  const last = await getMeta('last_log_prune');
+  if (last === day) return;
+  await setMeta('last_log_prune', day);
+
+  const reqRetention = Number(process.env.LOG_RETENTION_DAYS || 14);
+  const errRetention = Number(process.env.LOG_ERROR_RETENTION_DAYS || 30);
+  const reqCutoff = new Date(Date.now() - reqRetention * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+  const errCutoff = new Date(Date.now() - errRetention * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+
+  const delReq = await db('request_logs').where('created_at', '<', reqCutoff).del();
+  const delErr = await db('error_logs').where('created_at', '<', errCutoff).del();
+  const delEvt = await db('event_logs').where('created_at', '<', errCutoff).del();
+
+  const max = Number(process.env.LOG_MAX_ROWS || 100000);
+  const countRow = await db('request_logs').count({ c: '*' }).first();
+  const count = Number(countRow.c) || 0;
+  let delCap = 0;
+  if (count > max) {
+    const overflow = count - max;
+    const oldest = await db('request_logs').orderBy('id', 'asc').limit(overflow).select('id');
+    if (oldest.length) {
+      delCap = await db('request_logs').whereIn('id', oldest.map((r) => r.id)).del();
+    }
+  }
+
+  const removed = delReq + delErr + delEvt + delCap;
+  if (removed > 0) {
+    console.log(`[logs] pruned ${removed} log row(s) (requests ${delReq}, errors ${delErr}, events ${delEvt}, cap ${delCap})`);
   }
 }
 

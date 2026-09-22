@@ -5,14 +5,11 @@ const { hmac, decrypt } = require('../../lib/crypto');
 const { timingSafeEqualStr } = require('../../lib/timing');
 const strava = require('../../services/strava');
 const { importStravaActivity } = require('../../services/stravaImport');
-const { getActiveChallenge, hasChallengeStarted } = require('../../services/challengeWindow');
+const { getActiveChallenge } = require('../../services/challengeWindow');
 const { totalForEnrollment } = require('../../services/progress');
-const { syncMilestones } = require('../../services/milestones');
-const { createNotification } = require('../../services/notifications');
-const telegramMessenger = require('../../services/telegramMessenger');
-const botMessages = require('../../services/botMessages');
-const { unitForActivity, UNIT_LABEL } = require('../../constants');
+const { emitProgressEvents } = require('../../services/progressEvents');
 const { enqueue } = require('../../services/queue');
+const { logEvent } = require('../../services/logger');
 const { AppError } = require('../../middleware/errors');
 
 const router = express.Router();
@@ -21,13 +18,20 @@ router.use(express.raw({ type: 'application/json' }));
 
 function verifySignature(req) {
   const sig = req.get('X-Hub-Signature') || '';
-  const expected = 'sha1=' + hmac(config.strava.clientSecret, req.body.toString('utf8'));
+  // Prefer the exact raw bytes (stashed by express.json's verify hook); fall
+  // back to whatever body we have.
+  const raw = req.rawBody
+    ? req.rawBody.toString('utf8')
+    : typeof req.body === 'string'
+      ? req.body
+      : JSON.stringify(req.body || '');
+  const expected = 'sha1=' + hmac(config.strava.clientSecret, raw);
   return timingSafeEqualStr(sig, expected);
 }
 
 router.get('/', (req, res) => {
   const { 'hub.mode': mode, 'hub.challenge': challenge, 'hub.verify_token': verifyToken } = req.query;
-  if (mode === 'subscribe' && verifyToken === config.strava.verifyToken) {
+  if (mode === 'subscribe' && timingSafeEqualStr(String(verifyToken || ''), String(config.strava.verifyToken || ''))) {
     return res.json({ 'hub.challenge': challenge });
   }
   return res.status(403).json({ error: 'Verification failed' });
@@ -40,12 +44,21 @@ router.post('/', (req, res) => {
 
   let event;
   try {
-    event = JSON.parse(req.body.toString('utf8'));
+    const raw = req.rawBody ? req.rawBody.toString('utf8') : null;
+    event = raw ? JSON.parse(raw) : req.body;
   } catch {
     return res.status(400).json({ error: 'Invalid JSON' });
   }
 
-  enqueue(() => handleEvent(event), { maxAttempts: 3, delay: 60000 });
+  // No retry: handlers write to the DB and retries risk double-processing
+  // (Strava redelivers events on its own when we ACK late or fail).
+  enqueue(() => handleEvent(event), { maxAttempts: 1 });
+  logEvent({
+    source: 'webhook',
+    type: 'strava_event',
+    message: `strava ${event.aspect_type} ${event.object_type}`,
+    meta: { aspect: event.aspect_type, objectType: event.object_type }
+  });
   res.json({ ok: true });
 });
 
@@ -55,6 +68,7 @@ async function findEnrollmentByAthlete(athleteId) {
   const enrollment = await db('enrollments')
     .join('challenges', 'challenges.id', 'enrollments.challenge_id')
     .where({ 'enrollments.user_id': conn.user_id, 'challenges.is_active': true })
+    .select('enrollments.*')
     .first();
   return { conn, enrollment };
 }
@@ -89,7 +103,6 @@ async function handleEvent(event) {
 
   if (aspect === 'create' || aspect === 'update') {
     const challenge = await getActiveChallenge();
-    if (!hasChallengeStarted(challenge)) return; // logging/sync opens at launch
     const accessToken = await getAccessToken(conn);
     if (!accessToken) return;
     const activity = await strava.fetchActivity(accessToken, event.object_id);
@@ -97,23 +110,8 @@ async function handleEvent(event) {
 
     if (result.imported) {
       const total = await totalForEnrollment(enrollment.id);
-      const reached = await syncMilestones(enrollment.id, total);
-      if (reached.length) {
-        const user = await db('users').where({ id: conn.user_id }).first();
-        const name = user ? user.name : 'Member';
-        const lang = await telegramMessenger.getUserLanguage(conn.user_id);
-        const unitLabel = UNIT_LABEL[unitForActivity(enrollment.activity_type)] || 'KM';
-        for (const threshold of reached) {
-          await createNotification({
-            userId: conn.user_id,
-            type: 'milestone',
-            title: `You just hit ${threshold} ${unitLabel}.`,
-            body: `You reached the ${threshold} ${unitLabel} milestone. Keep moving.`
-          });
-          telegramMessenger.sendToUser(conn.user_id, botMessages.milestoneHit(lang, threshold, unitLabel));
-          telegramMessenger.broadcastMilestone(name, threshold, unitLabel);
-        }
-      }
+      const user = await db('users').where({ id: conn.user_id }).first();
+      await emitProgressEvents({ enrollment, total, user: user || { id: conn.user_id } });
     }
   }
 }

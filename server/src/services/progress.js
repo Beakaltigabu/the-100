@@ -1,6 +1,7 @@
 const db = require('../db');
 const { milestonesForActivity, unitForActivity, TOTAL_DAYS, ON_TRACK_TOLERANCE } = require('../constants');
 const { diffDays, startOfWeek, todayISO } = require('../lib/dates');
+const { getActiveChallenge } = require('./challengeWindow');
 
 function dayNumber(startDate, today) {
   const diff = diffDays(startDate, today);
@@ -42,12 +43,22 @@ function reachedThresholds(total, thresholds) {
 function enrollmentStatus(enrollment, total, lastActivityDate) {
   if (enrollment.status === 'completed') return 'completed';
 
-  const day = dayNumber(enrollment.start_date, todayISO());
+  const today = todayISO();
+  const day = dayNumber(enrollment.start_date, today);
+
+  // Before the challenge starts, members are simply "not started" — never
+  // falling behind.
+  if (today < enrollment.start_date) return 'not_started';
+
+  // Just started: the first couple of days are always "on track", so a brand
+  // new member isn't immediately flagged as falling behind.
+  if (day <= 2) return 'on_track';
+
   const expected = Number(enrollment.goal_value) * (day / TOTAL_DAYS) * ON_TRACK_TOLERANCE;
   if (total >= expected) return 'on_track';
 
   if (!lastActivityDate) return 'inactive';
-  const daysSince = diffDays(lastActivityDate, todayISO());
+  const daysSince = diffDays(lastActivityDate, today);
   return daysSince > 7 ? 'inactive' : 'falling_behind';
 }
 
@@ -58,7 +69,7 @@ async function enrollmentSummary(enrollmentId) {
   // The active challenge is the authoritative source for the window, so the
   // countdown and day counter are correct for every member (incl. existing
   // enrollments created before the challenge dates were set).
-  const challenge = await db('challenges').where({ is_active: true }).orderBy('id', 'desc').first();
+  const challenge = await getActiveChallenge();
   const startDate = (challenge && challenge.start_date) || enrollment.start_date;
   const endDate = (challenge && challenge.end_date) || enrollment.end_date;
 

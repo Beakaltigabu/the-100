@@ -6,12 +6,18 @@ const { AppError } = require('./errors');
 const JWT_ISSUER = 'the100-api';
 const JWT_AUDIENCE = 'the100-client';
 
-function signToken(payload) {
+function signToken(payload, options = {}) {
   return jwt.sign(payload, config.jwt.secret, {
-    expiresIn: config.jwt.expiresIn,
+    expiresIn: options.expiresIn || config.jwt.expiresIn,
     issuer: JWT_ISSUER,
     audience: JWT_AUDIENCE
   });
+}
+
+// Session tokens carry the user's token_version (`tv`) so password resets and
+// credential changes invalidate every outstanding session.
+function signSessionToken(user) {
+  return signToken({ sub: user.id, tv: user.token_version ?? 0 });
 }
 
 function verifyToken(token) {
@@ -52,6 +58,11 @@ async function requireAuth(req, res, next) {
     if (!user) {
       return next(new AppError('User no longer exists', 401));
     }
+    // Session tokens must match the user's current token_version; a password
+    // reset/change bumps it and kills every previously issued session.
+    if ((payload.tv ?? 0) !== (user.token_version ?? 0)) {
+      return next(new AppError('Session is no longer valid', 401));
+    }
     const admin = await db('admins').where({ user_id: user.id }).first();
     req.user = user;
     req.isAdmin = !!admin;
@@ -72,4 +83,4 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-module.exports = { signToken, verifyToken, setAuthCookie, clearAuthCookie, requireAuth, requireAdmin };
+module.exports = { signToken, signSessionToken, verifyToken, setAuthCookie, clearAuthCookie, requireAuth, requireAdmin };

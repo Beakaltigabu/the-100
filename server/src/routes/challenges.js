@@ -4,7 +4,10 @@ const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler, AppError } = require('../middleware/errors');
 const { ACTIVITY_TYPES, unitForActivity, UNIT_LABEL, maxGoalForUnit } = require('../constants');
+const { todayISO } = require('../lib/dates');
 const { createMilestonesForEnrollment, syncMilestones } = require('../services/milestones');
+const { ensureActiveChallenge } = require('../services/challenges');
+const { getActiveChallenge } = require('../services/challengeWindow');
 const { enrollmentSummary } = require('../services/progress');
 const { createNotification } = require('../services/notifications');
 const telegramMessenger = require('../services/telegramMessenger');
@@ -17,16 +20,23 @@ router.get(
   '/next',
   asyncHandler(async (req, res) => {
     res.set('Cache-Control', 'public, max-age=300');
-    const challenge = await db('challenges').where({ is_active: true }).orderBy('id', 'desc').first();
+    const challenge = await getActiveChallenge();
     if (!challenge) {
       return res.json({ challenge: null });
     }
+    const memberCount = await db('enrollments')
+      .where({ challenge_id: challenge.id })
+      .whereIn('status', ['committed', 'active', 'completed'])
+      .countDistinct({ c: 'user_id' })
+      .first();
     res.json({
       challenge: {
         id: challenge.id,
         name: challenge.name,
         startDate: challenge.start_date,
-        endDate: challenge.end_date
+        endDate: challenge.end_date,
+        started: todayISO() >= challenge.start_date,
+        memberCount: Number(memberCount.c) || 0
       }
     });
   })
@@ -49,10 +59,9 @@ function formatDate(iso) {
 router.get(
   '/current',
   asyncHandler(async (req, res) => {
-    const challenge = await db('challenges').where({ is_active: true }).orderBy('id', 'desc').first();
-    if (!challenge) {
-      throw new AppError('No active challenge found', 404);
-    }
+    // Self-heal: the active challenge is always present (seeded on boot and on
+    // demand), so onboarding/enrollment can never hit a missing challenge.
+    const challenge = await ensureActiveChallenge();
     const enrollment = await db('enrollments')
       .where({ user_id: req.user.id, challenge_id: challenge.id })
       .first();
@@ -97,16 +106,19 @@ router.post(
       throw new AppError(`Goal exceeds the maximum for this activity (${max})`, 400);
     }
 
-    const challenge = await db('challenges').where({ is_active: true }).orderBy('id', 'desc').first();
-    if (!challenge) {
-      throw new AppError('No active challenge to join', 404);
-    }
-
+    const challenge = await ensureActiveChallenge();
     const existing = await db('enrollments')
       .where({ user_id: req.user.id, challenge_id: challenge.id })
       .first();
     if (existing) {
-      throw new AppError('You are already enrolled in this challenge', 409);
+      // Idempotent: enrolling when already enrolled is not an error. Return the
+      // existing enrollment so retries/double-submits never surface a 409.
+      const summary = await enrollmentSummary(existing.id);
+      return res.status(200).json({
+        message: 'Already enrolled',
+        alreadyEnrolled: true,
+        enrollment: summary.enrollment
+      });
     }
 
     let enrollmentId;

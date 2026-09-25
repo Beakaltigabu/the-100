@@ -3,6 +3,7 @@ import { useLanguage } from '../../context/LanguageContext';
 
 const LINKS = [
   { to: '/admin', key: 'adminHome' },
+  { to: '/admin/broadcast', key: 'adminBroadcast' },
   { to: '/admin/members', key: 'adminMembers' },
   { to: '/admin/audit', key: 'adminAudit' },
   { to: '/admin/logs', key: 'adminLogs' },

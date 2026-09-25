@@ -3,7 +3,7 @@ import { api } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
 import { ErrorState } from '../../components/States';
 import PageSkeleton from '../../components/PageSkeleton';
-import AdminNav from './AdminNav';
+import AdminShell from '../../components/admin/AdminShell';
 import './Admin.css';
 
 function fmtTs(ts) {
@@ -49,10 +49,9 @@ export default function AdminSupport() {
   const entries = (data && data.entries) || [];
 
   return (
-    <div className="admin page page--full">
-      <AdminNav />
-      <div className="admin__head">
-        <h1 className="admin__title">{t('adminSupport')}</h1>
+    <AdminShell
+      title={t('adminSupport')}
+      actions={
         <div className="admin__tabs">
           {['', 'new', 'replied', 'resolved'].map((s) => (
             <button
@@ -68,8 +67,8 @@ export default function AdminSupport() {
             </button>
           ))}
         </div>
-      </div>
-
+      }
+    >
       <div className="admin__table-wrap">
         <table className="admin__table">
           <thead>
@@ -137,6 +136,6 @@ export default function AdminSupport() {
           ›
         </button>
       </div>
-    </div>
+    </AdminShell>
   );
 }

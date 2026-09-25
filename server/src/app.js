@@ -24,6 +24,7 @@ const stravaWebhookRoutes = require('./routes/webhooks/strava');
 const telegramWebhookRoutes = require('./routes/webhooks/telegram');
 const adminRoutes = require('./routes/admin');
 const contactRoutes = require('./routes/contact');
+const broadcastPublicRoutes = require('./routes/broadcasts');
 const { logRequest } = require('./services/logger');
 
 const app = express();
@@ -148,6 +149,7 @@ app.use('/api/integrations/telegram', telegramIntegrationRoutes);
 app.use('/api/webhooks/strava', webhookLimiter, stravaWebhookRoutes);
 app.use('/api/webhooks/telegram', telegramWebhookLimiter, telegramWebhookRoutes);
 app.use('/api/contact', contactLimiter, contactRoutes);
+app.use('/api/broadcasts', broadcastPublicRoutes);
 app.use('/api/admin', adminLimiter, adminRoutes);
 
 // In production, serve the built SPA from the same Node app (cPanel-friendly).

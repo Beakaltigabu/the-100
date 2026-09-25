@@ -6,10 +6,24 @@ const { getActiveChallenge, hasChallengeStarted } = require('./challengeWindow')
 const { logEvent } = require('./logger');
 
 function configured() {
-  return !!config.telegram.botToken;
+  return !!config.telegram.botToken || dryRun();
+}
+
+// TELEGRAM_DRY_RUN=true logs every send instead of hitting Telegram — safe for
+// local testing without touching the live bot/group.
+function dryRun() {
+  return process.env.TELEGRAM_DRY_RUN === 'true';
 }
 
 async function deliver(chatId, text, markup) {
+  if (dryRun()) {
+    logEvent({
+      source: 'bot',
+      type: 'send_dry_run',
+      message: `[dry-run] to ${chatId}: ${String(text).slice(0, 200)}`
+    });
+    return;
+  }
   const payload = { chat_id: chatId, text, parse_mode: 'HTML' };
   if (markup) payload.reply_markup = markup;
   const res = await fetch(`https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`, {
@@ -50,6 +64,9 @@ function sendToUser(userId, text) {
     async () => {
       const conn = await db('telegram_connections').where({ user_id: userId, state: 'active' }).first();
       if (conn && conn.telegram_user_id) {
+        // Global ban: never message a banned account.
+        const user = await db('users').where({ id: userId }).first();
+        if (user && user.banned_at) return;
         await deliver(conn.telegram_user_id, text);
       }
     },
@@ -81,6 +98,7 @@ function joinCommunityMarkup(lang) {
 // Approve a pending chat join request (requires the bot to be admin). Honors the
 // HTTP response so callers can tell a real failure from success.
 async function approveJoinRequest(chatId, userId) {
+  if (dryRun()) return true;
   const res = await fetch(`https://api.telegram.org/bot${config.telegram.botToken}/approveChatJoinRequest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

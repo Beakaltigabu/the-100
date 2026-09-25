@@ -92,8 +92,20 @@ module.exports = {
     'milestone',
     'weekly_checkin',
     'inactivity',
-    'finish'
+    'finish',
+    'announcement',
+    'reminder',
+    'broadcast',
+    'event',
+    'product_update',
+    'warning',
+    'nudge',
+    'custom'
   ],
+  BROADCAST_CHANNELS: ['inapp', 'telegram', 'group'],
+  BROADCAST_TYPES: ['announcement', 'reminder', 'nudge', 'event', 'product_update', 'warning', 'custom'],
+  BROADCAST_STATUS: ['draft', 'scheduled', 'live', 'ended'],
+  BROADCAST_PLACEMENTS: ['app', 'landing', 'both'],
 
   GOAL_BANDS: [
     { level: 'start', km: 50 },

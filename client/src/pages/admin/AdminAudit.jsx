@@ -3,7 +3,7 @@ import { api } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
 import { ErrorState } from '../../components/States';
 import PageSkeleton from '../../components/PageSkeleton';
-import AdminNav from './AdminNav';
+import AdminShell from '../../components/admin/AdminShell';
 import './Admin.css';
 
 export default function AdminAudit() {
@@ -28,15 +28,11 @@ export default function AdminAudit() {
   if (!entries) return null;
 
   return (
-    <div className="admin page page--full">
-      <AdminNav />
-      <div className="admin__head">
-        <h1 className="admin__title">{t('adminAudit')}</h1>
-      </div>
-
+    <AdminShell title={t('adminAudit')}>
       {entries.length === 0 ? (
         <p className="admin__empty">{t('auditEmpty')}</p>
       ) : (
+        <div className="admin__table-wrap">
         <table className="admin__table">
           <thead>
             <tr>
@@ -61,7 +57,8 @@ export default function AdminAudit() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
-    </div>
+    </AdminShell>
   );
 }

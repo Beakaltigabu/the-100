@@ -3,6 +3,7 @@ import { Routes, Route, Link, Navigate } from 'react-router-dom';
 import Navigation from './components/Navigation';
 import AppFooter from './components/AppFooter';
 import InstallBanner from './components/InstallBanner';
+import BroadcastBanner from './components/BroadcastBanner';
 import PageSkeleton from './components/PageSkeleton';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ScrollRestore } from './hooks/useScrollRestoration';
@@ -29,6 +30,9 @@ const AdminMemberDetail = lazy(() => import('./pages/admin/AdminMemberDetail'));
 const AdminAudit = lazy(() => import('./pages/admin/AdminAudit'));
 const AdminLogs = lazy(() => import('./pages/admin/AdminLogs'));
 const AdminSupport = lazy(() => import('./pages/admin/AdminSupport'));
+const AdminBroadcast = lazy(() => import('./pages/admin/AdminBroadcast'));
+const AdminBroadcastComposer = lazy(() => import('./pages/admin/AdminBroadcastComposer'));
+const AdminAnalytics = lazy(() => import('./pages/admin/AdminAnalytics'));
 const Support = lazy(() => import('./pages/Support'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 
@@ -64,6 +68,7 @@ export default function App() {
   return (
     <>
       <Navigation />
+      <BroadcastBanner />
       <InstallBanner />
       <LanguageSync />
       <ScrollRestore />
@@ -173,6 +178,38 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminSupport />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/broadcast"
+            element={
+              <AdminRoute>
+                <AdminBroadcast />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/broadcast/new"
+            element={
+              <AdminRoute>
+                <AdminBroadcastComposer />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/broadcast/:id/edit"
+            element={
+              <AdminRoute>
+                <AdminBroadcastComposer />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/analytics"
+            element={
+              <AdminRoute>
+                <AdminAnalytics />
               </AdminRoute>
             }
           />

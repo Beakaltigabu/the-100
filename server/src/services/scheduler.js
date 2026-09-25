@@ -6,6 +6,7 @@ const telegramMessenger = require('./telegramMessenger');
 const botMessages = require('./botMessages');
 const { getMeta, setMeta } = require('./meta');
 const { logEvent } = require('./logger');
+const { publishDueScheduled } = require('./broadcast');
 
 // Fast path for the once-per-day digest guard (persisted in the `meta` table so
 // a restart can't double-send the daily digest).
@@ -55,8 +56,17 @@ async function usersById(userIds) {
   return out;
 }
 
+// Enrollments of non-banned members (banned accounts are excluded from all
+// scheduler messaging — a global ban stops web + Telegram).
+async function activeEnrollments() {
+  const banned = await db('users').whereNotNull('banned_at').pluck('id');
+  const q = db('enrollments').whereIn('status', ['committed', 'active']);
+  if (banned.length) q.whereNotIn('user_id', banned);
+  return q;
+}
+
 async function checkFinishers() {
-  const enrollments = await db('enrollments').whereIn('status', ['committed', 'active']);
+  const enrollments = await activeEnrollments();
   if (!enrollments.length) return;
 
   const totals = await totalsByEnrollment(enrollments.map((e) => e.id));
@@ -86,7 +96,7 @@ async function checkFinishers() {
 }
 
 async function checkInactivity() {
-  const enrollments = await db('enrollments').whereIn('status', ['committed', 'active']);
+  const enrollments = await activeEnrollments();
   if (!enrollments.length) return;
 
   const lastDates = await lastDatesByEnrollment(enrollments.map((e) => e.id));
@@ -119,7 +129,7 @@ async function checkWeekly() {
   const today = todayISO();
   const weekStart = startOfWeek(today);
   if (diffDays(weekStart, today) !== 0) return; // only on first day of week (Monday)
-  const enrollments = await db('enrollments').whereIn('status', ['committed', 'active']);
+  const enrollments = await activeEnrollments();
   if (!enrollments.length) return;
 
   const totals = await totalsByEnrollment(enrollments.map((e) => e.id));
@@ -184,7 +194,7 @@ async function pruneStaleInvites() {
   }
 }
 
-const JOBS = [checkFinishers, checkInactivity, checkWeekly, sendDailyDigest, pruneStaleInvites, pruneLogs];
+const JOBS = [checkFinishers, checkInactivity, checkWeekly, sendDailyDigest, pruneStaleInvites, publishDueScheduled, pruneLogs];
 
 // Overlap guard: a slow cycle (large member base) must never interleave with
 // the next interval tick — that would duplicate broadcasts/notifications.
@@ -257,8 +267,13 @@ async function pruneLogs() {
 
 function startScheduler() {
   const SIX_HOURS = 6 * 60 * 60 * 1000;
+  const ONE_MINUTE = 60 * 1000;
   setTimeout(runScheduledJobs, 10 * 1000);
   setInterval(runScheduledJobs, SIX_HOURS);
+  // Scheduled broadcasts must go live promptly — poll every minute.
+  setInterval(() => {
+    publishDueScheduled().catch((err) => console.error('publishDueScheduled failed:', err.message));
+  }, ONE_MINUTE);
 }
 
 module.exports = { runScheduledJobs, startScheduler };

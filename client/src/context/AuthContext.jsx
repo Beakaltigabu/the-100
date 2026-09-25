@@ -47,10 +47,12 @@ export function AuthProvider({ children }) {
     } catch {
       // still clear the local session even if the server call fails
     }
-    // Drop the onboarding draft so a different account (or a re-registration
-    // after deletion) never inherits the previous user's answers/goal.
+    // Drop the onboarding draft and dismissed-broadcast state so a different
+    // account (or a re-registration after deletion) never inherits the previous
+    // user's answers/goal, and broadcasts reappear on the next login.
     try {
       localStorage.removeItem('the100_draft');
+      localStorage.removeItem('the100_dismissed_broadcasts');
     } catch {
       // localStorage unavailable — nothing to clear
     }

@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
-import { useLanguage } from '../../context/LanguageContext';
-import StatusBadge from '../../components/StatusBadge';
-import { ErrorState, EmptyState } from '../../components/States';
+import { ErrorState } from '../../components/States';
 import PageSkeleton from '../../components/PageSkeleton';
-import AdminNav from './AdminNav';
+import AdminShell from '../../components/admin/AdminShell';
+import { StatusBadge, EmptyState } from '../../components/admin/ui';
 import './Admin.css';
+
+const STATUS_TONE = { committed: 'info', active: 'success', completed: 'warning', abandoned: 'muted' };
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -14,8 +15,8 @@ function formatDate(iso) {
 }
 
 export default function AdminMembers() {
-  const { t } = useLanguage();
   const [members, setMembers] = useState([]);
+  const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -23,63 +24,75 @@ export default function AdminMembers() {
     setLoading(true);
     api
       .get('/api/admin/members')
-      .then((d) => setMembers(d.members))
+      .then((d) => setMembers(d.members || []))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(load, [load]);
 
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return members;
+    return members.filter((m) => `${m.name} ${m.email}`.toLowerCase().includes(s));
+  }, [members, q]);
+
   if (loading) return <PageSkeleton variant="admin" />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
   return (
-    <div className="admin page page--full">
-      <AdminNav />
-      <div className="admin__head">
-        <h1 className="admin__title">{t('adminMembers')}</h1>
-      </div>
+    <AdminShell title="Members">
+      <input
+        className="admin__filter-input"
+        style={{ marginBottom: 'var(--space-4)', width: '100%', maxWidth: 360 }}
+        placeholder="Search name or email…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
 
-      {members.length === 0 ? (
-        <EmptyState title={t('noActivitiesYet')} />
+      {filtered.length === 0 ? (
+        <div className="admin-card">
+          <EmptyState message={q ? 'No members match that search.' : 'No members yet.'} />
+        </div>
       ) : (
-        <div className="admin__table-wrap">
-          <table className="admin__table">
-            <thead>
-              <tr>
-                <th>{t('memberName')}</th>
-                <th>{t('memberGoal')}</th>
-                <th>{t('memberProgress')}</th>
-                <th>{t('memberDay')}</th>
-                <th>{t('memberStatus')}</th>
-                <th>{t('memberTelegram')}</th>
-                <th>{t('memberStrava')}</th>
-                <th>{t('joined')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((m) => (
-                <tr key={m.id}>
-                  <td>
-                    <Link to={`/admin/members/${m.id}`} className="admin__link">
-                      {m.name}
-                    </Link>
-                  </td>
-                  <td>{m.goalValue}</td>
-                  <td>{m.progress}</td>
-                  <td>{m.day}</td>
-                  <td>
-                    <StatusBadge status={m.status} />
-                  </td>
-                  <td>{m.telegram ? '✓' : '—'}</td>
-                  <td>{m.strava ? '✓' : '—'}</td>
-                  <td>{formatDate(m.joined)}</td>
+        <div className="admin-card" style={{ padding: 0 }}>
+          <div className="admin__table-wrap">
+            <table className="admin__table">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Goal</th>
+                  <th>Progress</th>
+                  <th>Day</th>
+                  <th>Status</th>
+                  <th>Telegram</th>
+                  <th>Strava</th>
+                  <th>Joined</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((m) => (
+                  <tr key={m.id}>
+                    <td>
+                      <Link to={`/admin/members/${m.id}`} className="admin__link">
+                        {m.name}
+                      </Link>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)' }}>{m.email}</div>
+                    </td>
+                    <td>{m.goalValue} {m.goalUnit}</td>
+                    <td>{m.progress}</td>
+                    <td>{m.day}</td>
+                    <td><StatusBadge tone={STATUS_TONE[m.status] || 'muted'}>{m.status}</StatusBadge></td>
+                    <td>{m.telegram ? '✓' : '—'}</td>
+                    <td>{m.strava ? '✓' : '—'}</td>
+                    <td>{formatDate(m.joined)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
-    </div>
+    </AdminShell>
   );
 }

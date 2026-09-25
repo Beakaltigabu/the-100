@@ -1,0 +1,150 @@
+.ash {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.ash__side {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-3);
+  background: var(--card-bg-alt);
+  border-right: 1px solid var(--color-line);
+}
+
+.ash__brand {
+  font-family: var(--font-display-condensed);
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0 var(--space-3) var(--space-5);
+  color: var(--fg);
+}
+
+.ash__section {
+  margin-bottom: var(--space-5);
+}
+
+.ash__section-label {
+  display: block;
+  padding: 0 var(--space-3) var(--space-2);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.ash__item {
+  display: block;
+  padding: 9px var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.ash__item:hover {
+  color: var(--fg);
+  background: var(--card-bg);
+}
+
+.ash__item.is-active {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  font-weight: 800;
+}
+
+/* Main */
+.ash__main {
+  min-width: 0;
+  padding: var(--space-5) var(--space-5) var(--space-8);
+}
+
+.ash__topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.ash__title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.ash__title-block .admin__title {
+  margin: 0;
+}
+
+.ash__topbar-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.ash__burger {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  background: var(--card-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.ash__burger span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--fg);
+}
+
+.ash__scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .ash {
+    grid-template-columns: 1fr;
+  }
+
+  .ash__side {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 260px;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .ash__side.is-open {
+    transform: translateX(0);
+  }
+
+  .ash__scrim.is-open,
+  .ash__side.is-open ~ .ash__scrim {
+    display: block;
+  }
+
+  .ash__burger {
+    display: flex;
+  }
+
+  .ash__main {
+    padding: var(--space-4);
+  }
+}

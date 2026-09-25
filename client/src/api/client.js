@@ -27,6 +27,7 @@ async function request(method, path, body) {
     const err = new Error(data.error || 'Request failed');
     err.status = res.status;
     err.details = data.details;
+    err.data = data;
     throw err;
   }
   return data;

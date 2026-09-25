@@ -74,6 +74,9 @@ async function boot() {
 
   app.listen(config.port, () => {
     console.log(`THE 100 API listening on http://localhost:${config.port}`);
+    if (process.env.TELEGRAM_DRY_RUN === 'true') {
+      console.log('[telegram] TELEGRAM_DRY_RUN=true — sends will be logged, not delivered to Telegram.');
+    }
     startScheduler();
     setTimeout(checkWebhookHealth, 2000);
   });

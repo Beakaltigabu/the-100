@@ -63,6 +63,10 @@ async function requireAuth(req, res, next) {
     if ((payload.tv ?? 0) !== (user.token_version ?? 0)) {
       return next(new AppError('Session is no longer valid', 401));
     }
+    // Global ban: a banned account cannot use the app.
+    if (user.banned_at) {
+      return next(new AppError('Account suspended', 401));
+    }
     const admin = await db('admins').where({ user_id: user.id }).first();
     req.user = user;
     req.isAdmin = !!admin;

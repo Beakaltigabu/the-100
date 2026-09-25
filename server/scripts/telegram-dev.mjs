@@ -18,6 +18,20 @@ if (!TELEGRAM_BOT_TOKEN) {
   process.exit(1);
 }
 
+// Safety: webhook testing re-registers the bot's webhook to this tunnel. Never
+// point this at the PRODUCTION bot. Use a dedicated TEST bot token, and disable
+// dry-run so messages actually deliver.
+if (process.env.TELEGRAM_DRY_RUN === 'true') {
+  console.error(
+    '\nTELEGRAM_DRY_RUN=true is set — messages will not actually send, so webhook\n' +
+      'testing will not exercise real delivery.\n\n' +
+      'Set TELEGRAM_DRY_RUN=false and TELEGRAM_BOT_TOKEN to a TEST bot token\n' +
+      '(created via @BotFather) before running this. NEVER use the production token.\n'
+  );
+  process.exit(1);
+}
+console.log('⚠️  Use a TEST bot token (not production). This re-registers the webhook.');
+
 const secretToken = createHash('sha256').update(TELEGRAM_BOT_TOKEN).digest('hex').slice(0, 32);
 const botBase = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 

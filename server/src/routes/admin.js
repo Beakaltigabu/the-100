@@ -11,6 +11,16 @@ const { audit } = require('../lib/audit');
 const { queued } = require('../services/logger');
 const { backlog } = require('../services/queue');
 const { getActiveChallenge } = require('../services/challengeWindow');
+const {
+  createBroadcast,
+  updateBroadcast,
+  publishBroadcast,
+  endBroadcast,
+  softDeleteBroadcast,
+  listBroadcasts,
+  countTargets
+} = require('../services/broadcast');
+const { BROADCAST_CHANNELS, BROADCAST_TYPES, BROADCAST_STATUS, BROADCAST_PLACEMENTS } = require('../constants');
 
 const router = express.Router();
 
@@ -71,6 +81,7 @@ router.get(
     // but the endpoint can never return an unbounded member list.
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 500));
+    const search = req.query.search ? String(req.query.search).trim().slice(0, 100) : '';
     const challenge = await getActiveChallenge();
     const challengeId = challenge ? challenge.id : 0;
     const totalRow = await db('enrollments').where({ challenge_id: challengeId }).count({ c: '*' }).first();
@@ -79,6 +90,9 @@ router.get(
       .leftJoin('telegram_connections', 'telegram_connections.user_id', 'enrollments.user_id')
       .leftJoin('strava_connections', 'strava_connections.user_id', 'enrollments.user_id')
       .where({ 'enrollments.challenge_id': challengeId })
+      .modify((q) => {
+        if (search) q.where((b) => b.where('users.name', 'like', `%${search}%`).orWhere('users.email', 'like', `%${search}%`));
+      })
       .select(
         'enrollments.id as enrollment_id',
         'users.id as user_id',
@@ -167,6 +181,7 @@ router.get(
 
     const telegram = await db('telegram_connections').where({ user_id: user.id }).first();
     const strava = await db('strava_connections').where({ user_id: user.id }).first();
+    const adminRow = await db('admins').where({ user_id: user.id }).first();
 
     res.json({
       user: {
@@ -179,7 +194,10 @@ router.get(
         experienceLevel: user.experience_level,
         weeklyBaseline: Number(user.weekly_baseline) || null,
         activityType: user.activity_type,
-        otherActivity: user.other_activity || null
+        otherActivity: user.other_activity || null,
+        language: user.language || 'en',
+        banned: !!user.banned_at,
+        isAdmin: !!adminRow
       },
       enrollment: enrollment
         ? {
@@ -201,6 +219,160 @@ router.get(
         telegram: telegram ? { state: telegram.state } : { state: 'not_connected' },
         strava: strava ? { status: strava.status } : { status: 'not_connected' }
       }
+    });
+  })
+);
+
+// ── User management ───────────────────────────────────
+router.patch(
+  '/members/:id',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    const updates = {};
+    if (req.body.name !== undefined) updates.name = String(req.body.name).trim().slice(0, 80);
+    if (req.body.email !== undefined) {
+      const email = String(req.body.email).trim().toLowerCase();
+      if (email && email !== user.email) {
+        const exists = await db('users').where({ email }).whereNot({ id: user.id }).first();
+        if (exists) return res.status(409).json({ error: 'Email already in use' });
+        updates.email = email;
+      }
+    }
+    if (req.body.language !== undefined && ['en', 'am'].includes(req.body.language)) updates.language = req.body.language;
+    if (req.body.experience_level !== undefined) updates.experience_level = String(req.body.experience_level).slice(0, 30);
+    if (req.body.weekly_baseline !== undefined) updates.weekly_baseline = req.body.weekly_baseline === null ? null : Number(req.body.weekly_baseline);
+    if (!Object.keys(updates).length) return res.status(400).json({ error: 'Nothing to update' });
+    await db('users').where({ id: user.id }).update(updates);
+    audit(req.user.id, 'member_update', 'user', user.id, req.ip);
+    res.json({ message: 'Updated' });
+  })
+);
+
+router.post(
+  '/members/:id/ban',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    await db('users').where({ id: user.id }).update({ banned_at: db.fn.now() });
+    audit(req.user.id, 'member_ban', 'user', user.id, req.ip);
+    res.json({ message: 'Banned' });
+  })
+);
+
+router.post(
+  '/members/:id/unban',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    await db('users').where({ id: user.id }).update({ banned_at: null });
+    audit(req.user.id, 'member_unban', 'user', user.id, req.ip);
+    res.json({ message: 'Unbanned' });
+  })
+);
+
+router.delete(
+  '/members/:id',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    if (user.id === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account here' });
+    await db.transaction(async (trx) => {
+      const enrollmentIds = await trx('enrollments').where({ user_id: user.id }).pluck('id');
+      if (enrollmentIds.length) {
+        await trx('challenge_activities').whereIn('enrollment_id', enrollmentIds).del();
+        await trx('milestones').whereIn('enrollment_id', enrollmentIds).del();
+      }
+      await trx('enrollments').where({ user_id: user.id }).del();
+      await trx('telegram_connections').where({ user_id: user.id }).del();
+      await trx('strava_connections').where({ user_id: user.id }).del();
+      await trx('notifications').where({ user_id: user.id }).del();
+      await trx('community_posts').where({ user_id: user.id }).del();
+      await trx('post_cheers').where({ user_id: user.id }).del();
+      await trx('password_reset_tokens').where({ user_id: user.id }).del();
+      await trx('admins').where({ user_id: user.id }).del();
+      await trx('users').where({ id: user.id }).del();
+    });
+    audit(req.user.id, 'member_delete', 'user', user.id, req.ip);
+    res.json({ message: 'Member deleted' });
+  })
+);
+
+router.post(
+  '/members/:id/admin',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    const existing = await db('admins').where({ user_id: user.id }).first();
+    if (!existing) await db('admins').insert({ user_id: user.id, role: 'admin' });
+    audit(req.user.id, 'grant_admin', 'user', user.id, req.ip);
+    res.json({ message: 'Granted admin' });
+  })
+);
+
+router.post(
+  '/members/:id/remove-admin',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    await db('admins').where({ user_id: user.id }).del();
+    audit(req.user.id, 'revoke_admin', 'user', user.id, req.ip);
+    res.json({ message: 'Removed admin' });
+  })
+);
+
+// ── Analytics ─────────────────────────────────────────
+router.get(
+  '/analytics',
+  asyncHandler(async (req, res) => {
+    const now = new Date();
+    const dayAgo = new Date(now - 24 * 3600 * 1000);
+    const weekAgo = new Date(now - 7 * 24 * 3600 * 1000);
+    const monthAgo = new Date(now - 30 * 24 * 3600 * 1000);
+    const seriesSince = new Date(now - 29 * 24 * 3600 * 1000);
+
+    const [dau, wau, mau, totalUsers, onboarded, newUsers30, enrolled, activeMembers, completed, activitySeries, userSeries] = await Promise.all([
+      db('request_logs').where('created_at', '>=', dayAgo).countDistinct({ c: 'user_id' }).first(),
+      db('request_logs').where('created_at', '>=', weekAgo).countDistinct({ c: 'user_id' }).first(),
+      db('request_logs').where('created_at', '>=', monthAgo).countDistinct({ c: 'user_id' }).first(),
+      db('users').count({ c: '*' }).first(),
+      db('users').where({ onboarding_complete: true }).count({ c: '*' }).first(),
+      db('users').where('created_at', '>=', monthAgo).count({ c: '*' }).first(),
+      db('enrollments').count({ c: '*' }).first(),
+      db('enrollments').whereIn('status', ['committed', 'active']).countDistinct({ c: 'user_id' }).first(),
+      db('enrollments').where({ status: 'completed' }).count({ c: '*' }).first(),
+      db('challenge_activities')
+        .where('date', '>=', seriesSince.toISOString().slice(0, 10))
+        .select(db.raw('DATE(date) as d'))
+        .count({ c: '*' })
+        .sum({ km: 'quantity' })
+        .groupByRaw('DATE(date)'),
+      db('users')
+        .where('created_at', '>=', seriesSince)
+        .select(db.raw('DATE(created_at) as d'))
+        .count({ c: '*' })
+        .groupByRaw('DATE(created_at)')
+    ]);
+
+    res.json({
+      dau: Number(dau.c),
+      wau: Number(wau.c),
+      mau: Number(mau.c),
+      totalUsers: Number(totalUsers.c),
+      onboarded: Number(onboarded.c),
+      newUsers30d: Number(newUsers30.c),
+      enrolled: Number(enrolled.c),
+      activeMembers: Number(activeMembers.c),
+      completed: Number(completed.c),
+      funnel: {
+        registered: Number(totalUsers.c),
+        onboarded: Number(onboarded.c),
+        enrolled: Number(enrolled.c),
+        active: Number(activeMembers.c),
+        completed: Number(completed.c)
+      },
+      activitySeries: activitySeries.map((r) => ({ day: r.d, count: Number(r.c), km: Math.round(Number(r.km || 0) * 100) / 100 })),
+      userSeries: userSeries.map((r) => ({ day: r.d, count: Number(r.c) }))
     });
   })
 );
@@ -453,6 +625,192 @@ router.get(
     const totalRow = await q.clone().count({ c: '*' }).first();
     const rows = await q.orderBy('id', 'desc').limit(limit).offset((page - 1) * limit);
     res.json({ entries: rows, total: Number(totalRow.c), page, limit });
+  })
+);
+
+// ── Broadcast ─────────────────────────────────────────
+function parseBroadcastBody(body) {
+  const title = body && body.title ? String(body.title).trim() : '';
+  const bodyText = body && body.body ? String(body.body).trim() : '';
+  const type = BROADCAST_TYPES.includes(body && body.type) ? body.type : 'announcement';
+  const placement = BROADCAST_PLACEMENTS.includes(body && body.placement) ? body.placement : 'app';
+  let channels = Array.isArray(body && body.channels) && body.channels.length ? body.channels : ['inapp', 'telegram', 'group'];
+  channels = channels.filter((c) => BROADCAST_CHANNELS.includes(c));
+  const targeting = body && body.targeting && typeof body.targeting === 'object' ? body.targeting : { mode: 'all' };
+  const scheduleAt = body && body.scheduleAt ? new Date(body.scheduleAt) : null;
+  const priority = body && body.priority != null ? Number(body.priority) : 0;
+  return {
+    title,
+    bodyText,
+    titleAm: body && body.title_am ? String(body.title_am).trim() : null,
+    bodyAm: body && body.body_am ? String(body.body_am).trim() : null,
+    type,
+    placement,
+    channels,
+    targeting,
+    scheduleAt: scheduleAt && !Number.isNaN(scheduleAt.getTime()) ? scheduleAt : null,
+    priority
+  };
+}
+
+function serializeBroadcastRow(b) {
+  return {
+    id: b.id,
+    type: b.type,
+    title: b.title,
+    body: b.body,
+    title_am: b.title_am,
+    body_am: b.body_am,
+    channels: (b.channels || '').split(',').filter(Boolean),
+    placement: b.placement,
+    priority: Number(b.priority) || 0,
+    status: b.status,
+    target: b.target,
+    targeting: b.targeting ? safeParse(b.targeting) : { mode: 'all' },
+    scheduledAt: b.scheduled_at,
+    publishedAt: b.published_at,
+    endedAt: b.ended_at,
+    groupSent: !!b.group_sent,
+    adminName: b.admin_name || null,
+    createdAt: b.created_at
+  };
+}
+
+function safeParse(s) {
+  if (s == null) return { mode: 'all' };
+  if (typeof s === 'object') return s;
+  try { return JSON.parse(s); } catch { return { mode: 'all' }; }
+}
+
+router.get(
+  '/broadcasts',
+  asyncHandler(async (req, res) => {
+    const status = req.query.status && BROADCAST_STATUS.includes(req.query.status) ? req.query.status : null;
+    const rows = await listBroadcasts({ status, limit: req.query.limit ? parseInt(req.query.limit, 10) : 50 });
+    const ids = rows.map((b) => b.id);
+    const recipients = ids.length
+      ? await db('broadcast_recipients')
+          .whereIn('broadcast_id', ids)
+          .groupBy('broadcast_id', 'channel')
+          .select('broadcast_id', 'channel')
+          .count({ c: '*' })
+      : [];
+    const deliveryById = {};
+    for (const r of recipients) {
+      deliveryById[r.broadcast_id] = deliveryById[r.broadcast_id] || { inapp: 0, telegram: 0 };
+      deliveryById[r.broadcast_id][r.channel === 'inapp' ? 'inapp' : 'telegram'] = Number(r.c);
+    }
+    res.json({
+      broadcasts: rows.map((b) => ({
+        ...serializeBroadcastRow(b),
+        delivery: deliveryById[b.id] || { inapp: 0, telegram: 0 }
+      }))
+    });
+  })
+);
+
+router.post(
+  '/broadcasts/estimate',
+  asyncHandler(async (req, res) => {
+    const targeting = (req.body && req.body.targeting) || { mode: 'all' };
+    const count = await countTargets(targeting);
+    res.json({ count });
+  })
+);
+
+router.post(
+  '/broadcasts',
+  asyncHandler(async (req, res) => {
+    const p = parseBroadcastBody(req.body);
+    if (!p.title) return res.status(400).json({ error: 'Title is required' });
+    if (!p.bodyText) return res.status(400).json({ error: 'Body is required' });
+    if (!p.channels.length) return res.status(400).json({ error: 'Pick at least one channel' });
+
+    const id = await createBroadcast({
+      adminId: req.user.id,
+      type: p.type,
+      title: p.title,
+      body: p.bodyText,
+      titleAm: p.titleAm,
+      bodyAm: p.bodyAm,
+      channels: p.channels,
+      targeting: p.targeting,
+      placement: p.placement,
+      priority: p.priority,
+      scheduleAt: p.scheduleAt,
+      draft: req.body && req.body.draft === true,
+      endPrevious: req.body && req.body.endPrevious === true
+    });
+
+    if (id && id.conflict) {
+      return res.status(409).json({ error: 'Another broadcast is live', conflict: id.conflict });
+    }
+
+    audit(req.user.id, 'broadcast_create', 'broadcast', id.id, req.ip);
+    res.status(201).json({ message: p.scheduleAt ? 'Broadcast scheduled' : 'Broadcast sent', id: id.id });
+  })
+);
+
+router.patch(
+  '/broadcasts/:id',
+  asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const patch = {};
+    if (req.body.type !== undefined) patch.type = BROADCAST_TYPES.includes(req.body.type) ? req.body.type : undefined;
+    if (req.body.title !== undefined) patch.title = String(req.body.title).slice(0, 160);
+    if (req.body.body !== undefined) patch.body = String(req.body.body).slice(0, 5000);
+    if (req.body.title_am !== undefined) patch.title_am = req.body.title_am ? String(req.body.title_am).slice(0, 160) : null;
+    if (req.body.body_am !== undefined) patch.body_am = req.body.body_am ? String(req.body.body_am).slice(0, 5000) : null;
+    if (req.body.channels !== undefined) {
+      patch.channels = Array.isArray(req.body.channels) ? req.body.channels.filter((c) => BROADCAST_CHANNELS.includes(c)) : undefined;
+    }
+    if (req.body.placement !== undefined) patch.placement = BROADCAST_PLACEMENTS.includes(req.body.placement) ? req.body.placement : undefined;
+    if (req.body.priority !== undefined) patch.priority = Number(req.body.priority) || 0;
+    if (req.body.targeting !== undefined) patch.targeting = req.body.targeting;
+
+    const result = await updateBroadcast(id, patch);
+    if (result === null) return res.status(404).json({ error: 'Broadcast not found' });
+    if (result === 'locked') return res.status(409).json({ error: 'Only draft or live broadcasts can be edited' });
+
+    audit(req.user.id, 'broadcast_update', 'broadcast', id, req.ip);
+    res.json({ message: 'Updated', broadcast: serializeBroadcastRow(result) });
+  })
+);
+
+router.post(
+  '/broadcasts/:id/publish',
+  asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const result = await publishBroadcast(id, { endPrevious: req.body && req.body.endPrevious === true });
+    if (result === null) return res.status(404).json({ error: 'Broadcast not found' });
+    if (result === 'locked') return res.status(409).json({ error: 'Only draft or scheduled broadcasts can be published' });
+    if (result && result.conflict) {
+      return res.status(409).json({ error: 'Another broadcast is live', conflict: result.conflict });
+    }
+    audit(req.user.id, 'broadcast_publish', 'broadcast', id, req.ip);
+    res.json({ message: 'Broadcast is now live', broadcast: serializeBroadcastRow(result) });
+  })
+);
+
+router.post(
+  '/broadcasts/:id/end',
+  asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const result = await endBroadcast(id);
+    if (!result) return res.status(404).json({ error: 'Broadcast not found or not live' });
+    audit(req.user.id, 'broadcast_end', 'broadcast', id, req.ip);
+    res.json({ message: 'Broadcast ended', broadcast: serializeBroadcastRow(result) });
+  })
+);
+
+router.delete(
+  '/broadcasts/:id',
+  asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const ok = await softDeleteBroadcast(id);
+    if (!ok) return res.status(404).json({ error: 'Broadcast not found' });
+    audit(req.user.id, 'broadcast_delete', 'broadcast', id, req.ip);
+    res.json({ message: 'Broadcast deleted' });
   })
 );
 

@@ -73,6 +73,81 @@ LOCK TABLES `admins` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `broadcasts`
+--
+
+DROP TABLE IF EXISTS `broadcasts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `broadcasts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `admin_user_id` bigint unsigned DEFAULT NULL,
+  `type` varchar(30) NOT NULL DEFAULT 'announcement',
+  `title` varchar(160) NOT NULL,
+  `body` text NOT NULL,
+  `title_am` varchar(160) DEFAULT NULL,
+  `body_am` text,
+  `channels` varchar(100) NOT NULL DEFAULT 'inapp,telegram',
+  `target` varchar(30) NOT NULL DEFAULT 'all',
+  `recipient_count` int NOT NULL DEFAULT '0',
+  `telegram_count` int NOT NULL DEFAULT '0',
+  `group_sent` tinyint(1) NOT NULL DEFAULT '0',
+  `sent_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `status` varchar(20) NOT NULL DEFAULT 'draft',
+  `scheduled_at` timestamp NULL DEFAULT NULL,
+  `published_at` timestamp NULL DEFAULT NULL,
+  `ended_at` timestamp NULL DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL,
+  `priority` int NOT NULL DEFAULT '0',
+  `placement` varchar(20) NOT NULL DEFAULT 'app',
+  `targeting` json DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `broadcasts_created_at_index` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `broadcast_recipients`
+--
+
+DROP TABLE IF EXISTS `broadcast_recipients`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `broadcast_recipients` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `broadcast_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `channel` varchar(20) NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'sent',
+  `error` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `broadcast_recipients_broadcast_id_index` (`broadcast_id`),
+  KEY `broadcast_recipients_user_id_index` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `broadcast_recipients`
+--
+
+LOCK TABLES `broadcast_recipients` WRITE;
+/*!40000 ALTER TABLE `broadcast_recipients` DISABLE KEYS */;
+/*!40000 ALTER TABLE `broadcast_recipients` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Dumping data for table `broadcasts`
+--
+
+LOCK TABLES `broadcasts` WRITE;
+/*!40000 ALTER TABLE `broadcasts` DISABLE KEYS */;
+/*!40000 ALTER TABLE `broadcasts` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `challenge_activities`
 --
 
@@ -416,7 +491,7 @@ CREATE TABLE `knex_migrations` (
 
 LOCK TABLES `knex_migrations` WRITE;
 /*!40000 ALTER TABLE `knex_migrations` DISABLE KEYS */;
-INSERT INTO `knex_migrations` VALUES (2,'20260912000000_init.js',1,'2026-09-12 10:41:19'),(3,'20260912150000_add_onboarding_fields.js',2,'2026-09-12 12:27:35'),(4,'20260912160000_activity_aware_goals.js',3,'2026-09-12 13:30:36'),(5,'20260912170000_motivation_multi.js',4,'2026-09-12 18:42:16'),(6,'20260916170000_strava_last_synced.js',5,'2026-09-16 06:59:26'),(7,'20260916180000_oauth_users.js',6,'2026-09-16 07:45:46'),(8,'20260916190000_drop_strava_uid.js',7,'2026-09-16 08:26:10'),(9,'20260916200000_challenge_start_sep21.js',8,'2026-09-16 08:52:29'),(10,'20260916210000_align_enrollments_dates.js',9,'2026-09-16 09:04:59'),(11,'20260916220000_community_posts.js',10,'2026-09-16 09:31:35'),(12,'20260916230000_user_language.js',11,'2026-09-16 11:40:07'),(13,'20260917000000_security_compliance.js',12,'2026-09-16 14:46:44'),(14,'20260917010000_enforce_fks.js',13,'2026-09-16 15:08:20'),(15,'20260917020000_perf_indexes.js',14,'2026-09-16 15:26:45'),(16,'20260918000000_community_redesign.js',15,'2026-09-18 21:09:09'),(17,'20260918010000_community_cheers.js',16,'2026-09-19 03:41:01'),(18,'20260919000000_meta.js',17,'2026-09-19 06:58:23'),(19,'20260920000000_observability.js',18,'2026-09-19 14:30:00'),(20,'20260920000001_contact_messages.js',19,'2026-09-19 14:47:00'),(22,'20260921000000_security_perf.js',20,'2026-09-21 09:41:59');
+INSERT INTO `knex_migrations` VALUES (2,'20260912000000_init.js',1,'2026-09-12 10:41:19'),(3,'20260912150000_add_onboarding_fields.js',2,'2026-09-12 12:27:35'),(4,'20260912160000_activity_aware_goals.js',3,'2026-09-12 13:30:36'),(5,'20260912170000_motivation_multi.js',4,'2026-09-12 18:42:16'),(6,'20260916170000_strava_last_synced.js',5,'2026-09-16 06:59:26'),(7,'20260916180000_oauth_users.js',6,'2026-09-16 07:45:46'),(8,'20260916190000_drop_strava_uid.js',7,'2026-09-16 08:26:10'),(9,'20260916200000_challenge_start_sep21.js',8,'2026-09-16 08:52:29'),(10,'20260916210000_align_enrollments_dates.js',9,'2026-09-16 09:04:59'),(11,'20260916220000_community_posts.js',10,'2026-09-16 09:31:35'),(12,'20260916230000_user_language.js',11,'2026-09-16 11:40:07'),(13,'20260917000000_security_compliance.js',12,'2026-09-16 14:46:44'),(14,'20260917010000_enforce_fks.js',13,'2026-09-16 15:08:20'),(15,'20260917020000_perf_indexes.js',14,'2026-09-16 15:26:45'),(16,'20260918000000_community_redesign.js',15,'2026-09-18 21:09:09'),(17,'20260918010000_community_cheers.js',16,'2026-09-19 03:41:01'),(18,'20260919000000_meta.js',17,'2026-09-19 06:58:23'),(19,'20260920000000_observability.js',18,'2026-09-19 14:30:00'),(20,'20260920000001_contact_messages.js',19,'2026-09-19 14:47:00'),(22,'20260921000000_security_perf.js',20,'2026-09-21 09:41:59'),(23,'20260922000000_broadcasts.js',21,'2026-09-22 00:00:00'),(24,'20260923000000_broadcast_v2.js',22,'2026-09-23 00:00:00'),(25,'20260924000000_user_ban.js',23,'2026-09-24 00:00:00'),(26,'20260925000000_notification_types.js',24,'2026-09-25 00:00:00');
 /*!40000 ALTER TABLE `knex_migrations` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -506,7 +581,7 @@ DROP TABLE IF EXISTS `notifications`;
 CREATE TABLE `notifications` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint unsigned NOT NULL,
-  `type` enum('welcome','commitment','milestone','weekly_checkin','inactivity','finish') NOT NULL,
+  `type` enum('welcome','commitment','milestone','weekly_checkin','inactivity','finish','announcement','reminder','broadcast','event','product_update','warning','nudge','custom') NOT NULL,
   `title` varchar(120) NOT NULL,
   `body` text NOT NULL,
   `channel` enum('web','email','telegram') NOT NULL DEFAULT 'web',
@@ -724,9 +799,11 @@ CREATE TABLE `users` (
   `email_verified` tinyint(1) NOT NULL DEFAULT '0',
   `language` varchar(10) DEFAULT NULL,
   `token_version` int NOT NULL DEFAULT '0',
+  `banned_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `users_email_unique` (`email`),
-  UNIQUE KEY `users_google_id_unique` (`google_id`)
+  UNIQUE KEY `users_google_id_unique` (`google_id`),
+  KEY `users_banned_at_index` (`banned_at`)
 ) ENGINE=InnoDB AUTO_INCREMENT=92 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

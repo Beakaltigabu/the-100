@@ -71,3 +71,31 @@ export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirm', 
     </div>
   );
 }
+
+// Prev/next pager for admin list pages.
+export function AdminPager({ page, limit, total, onPage }) {
+  const pages = Math.max(1, Math.ceil(total / Math.max(1, limit)));
+  return (
+    <div className="admin__pager">
+      <button className="btn btn--secondary btn--sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+        ‹
+      </button>
+      <span className="admin__page">
+        {page} / {pages}
+      </span>
+      <button className="btn btn--secondary btn--sm" disabled={page >= pages} onClick={() => onPage(page + 1)}>
+        ›
+      </button>
+    </div>
+  );
+}
+
+// From/to date-range inputs for admin list filters (YYYY-MM-DD).
+export function DateRange({ from, to, onFrom, onTo }) {
+  return (
+    <div className="admin__filters">
+      <input className="admin__filter-input admin__filter-input--sm" type="date" value={from || ''} onChange={(e) => onFrom(e.target.value)} aria-label="From" />
+      <input className="admin__filter-input admin__filter-input--sm" type="date" value={to || ''} onChange={(e) => onTo(e.target.value)} aria-label="To" />
+    </div>
+  );
+}

@@ -3,6 +3,30 @@
   overflow-y: auto;
 }
 
+.member-profile__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: var(--space-3);
+}
+
+.mp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--card-bg-alt);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.mp-badge__icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
 .member-profile__head {
   display: flex;
   align-items: center;

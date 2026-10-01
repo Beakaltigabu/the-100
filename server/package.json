@@ -14,7 +14,17 @@
     "telegram:setup": "node scripts/telegram-setup.mjs",
     "telegram:dev": "node scripts/telegram-dev.mjs",
     "telegram:health": "node scripts/telegram-health.mjs",
-    "loadtest": "node scripts/loadtest.mjs"
+    "loadtest": "node scripts/loadtest.mjs",
+    "test:integration": "vitest run integration",
+    "db:import": "node scripts/db-import.cjs",
+    "db:manifest": "node scripts/db-manifest.cjs",
+    "db:migrate": "node scripts/db-migrate.cjs",
+    "db:rollback": "node scripts/db-rollback.cjs",
+    "strava:backfill": "node scripts/strava-backfill.mjs",
+    "db:stress": "node scripts/db-stress.cjs",
+    "db:reach": "node scripts/db-reach.mjs",
+    "db:egress": "node scripts/db-egress.mjs",
+    "db:test": "node scripts/db-test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -28,6 +38,7 @@
     "jsonwebtoken": "^9.0.2",
     "knex": "^3.1.0",
     "mysql2": "^3.11.5",
+    "web-push": "^3.6.7",
     "zod": "^3.24.1"
   },
   "devDependencies": {

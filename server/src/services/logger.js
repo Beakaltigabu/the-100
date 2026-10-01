@@ -1,4 +1,5 @@
 const db = require('../db');
+const { noteDbError, isSaturatedError } = require('./dbHealth');
 
 // Buffered async logger. Request/error/event rows are batched and written on a
 // short interval or when the buffer fills, so logging never slows the request
@@ -28,7 +29,10 @@ async function insertRows(table, rows) {
     await db(table).insert(rows);
   } catch (err) {
     console.error(`Logger flush error (${table}):`, err.message);
-    if (table === 'request_logs' || table === 'error_logs') {
+    noteDbError(err);
+    // On a saturated server, do NOT retry — retrying hammers an already-full
+    // MySQL and compounds the problem.
+    if (!isSaturatedError(err) && (table === 'request_logs' || table === 'error_logs')) {
       try {
         await db(table).insert(rows.map((r) => ({ ...r, user_id: null })));
       } catch (err2) {

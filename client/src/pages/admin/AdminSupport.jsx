@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { api } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
 import { ErrorState } from '../../components/States';
 import PageSkeleton from '../../components/PageSkeleton';
 import AdminShell from '../../components/admin/AdminShell';
+import { AdminPager, DateRange } from '../../components/admin/ui';
+import { useAdminList } from '../../lib/adminList';
 import './Admin.css';
 
 function fmtTs(ts) {
@@ -15,38 +17,30 @@ function fmtTs(ts) {
 
 export default function AdminSupport() {
   const { t } = useLanguage();
-  const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [actionError, setActionError] = useState('');
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError('');
-    const qs = new URLSearchParams({ page: String(page), limit: '50' });
-    if (status) qs.set('status', status);
-    api
-      .get(`/api/admin/contact?${qs.toString()}`)
-      .then(setData)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [page, status]);
-
-  useEffect(load, [load]);
+  const buildQuery = useCallback(() => ({ status, from, to }), [status, from, to]);
+  const { rows, total, page, limit, loading, error, reload, viewMore, goPage } = useAdminList({
+    path: '/api/admin/contact',
+    dataKey: 'entries',
+    buildQuery
+  });
 
   const setStatusFor = async (id, next) => {
+    setActionError('');
     try {
       await api.post(`/api/admin/contact/${id}/status`, { status: next });
-      load();
+      reload();
     } catch (err) {
-      setError(err.message);
+      setActionError(err.message);
     }
   };
 
-  if (loading) return <PageSkeleton variant="admin" />;
-  if (error) return <ErrorState message={error} onRetry={load} />;
-  const entries = (data && data.entries) || [];
+  if (loading && rows.length === 0) return <PageSkeleton variant="admin" />;
+  if (error && rows.length === 0) return <ErrorState message={error} onRetry={reload} />;
 
   return (
     <AdminShell
@@ -58,10 +52,7 @@ export default function AdminSupport() {
               key={s || 'all'}
               type="button"
               className={`admin__tab ${status === s ? 'is-active' : ''}`.trim()}
-              onClick={() => {
-                setStatus(s);
-                setPage(1);
-              }}
+              onClick={() => setStatus(s)}
             >
               {s ? t(`contactStatus${s.charAt(0).toUpperCase()}${s.slice(1)}`) : 'ALL'}
             </button>
@@ -69,6 +60,11 @@ export default function AdminSupport() {
         </div>
       }
     >
+      <div className="admin__filters">
+        <DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />
+      </div>
+      {actionError ? <p className="ob-error">{actionError}</p> : null}
+
       <div className="admin__table-wrap">
         <table className="admin__table">
           <thead>
@@ -83,12 +79,12 @@ export default function AdminSupport() {
             </tr>
           </thead>
           <tbody>
-            {entries.length === 0 ? (
+            {rows.length === 0 ? (
               <tr>
                 <td colSpan={7}>{t('adminSupportEmpty')}</td>
               </tr>
             ) : (
-              entries.map((m) => (
+              rows.map((m) => (
                 <tr key={m.id}>
                   <td>{fmtTs(m.ts)}</td>
                   <td>{m.name}</td>
@@ -121,21 +117,14 @@ export default function AdminSupport() {
         </table>
       </div>
 
-      <div className="admin__pager">
-        <button className="btn btn--secondary btn--sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-          ‹
-        </button>
-        <span className="admin__page">
-          {data.page} / {Math.max(1, Math.ceil(data.total / data.limit))}
-        </span>
-        <button
-          className="btn btn--secondary btn--sm"
-          disabled={page * data.limit >= data.total}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          ›
-        </button>
-      </div>
+      <AdminPager page={page} limit={limit} total={total} onPage={goPage} />
+      {page * limit < total ? (
+        <div className="admin__pager">
+          <button className="btn btn--secondary btn--sm" onClick={viewMore}>
+            {t('adminViewMore')}
+          </button>
+        </div>
+      ) : null}
     </AdminShell>
   );
 }

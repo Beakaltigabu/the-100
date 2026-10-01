@@ -4,6 +4,11 @@ const { importStravaActivity } = require('./stravaImport');
 const stravaRateLimit = require('./stravaRateLimit');
 const { getActiveChallenge } = require('./challengeWindow');
 const { decrypt } = require('../lib/crypto');
+const { totalForEnrollment } = require('./progress');
+const { emitProgressEvents, sendActivityConfirm } = require('./progressEvents');
+
+const PAGE_SIZE = 50;
+const MAX_SYNC_PAGES = 10;
 
 // Returns a valid (non-expired) access token for a connection, refreshing if needed.
 async function getValidAccessToken(conn) {
@@ -28,9 +33,36 @@ async function getValidAccessToken(conn) {
   return decrypt(encrypted.encrypted_access_token);
 }
 
+// Earliest point a sync may fetch from, as unix seconds. The latest of:
+//  - midnight of the last successful sync (incremental)
+//  - the challenge start day (so syncing begins at the launch, e.g. 2026-09-23)
+//  - the day the member connected
+// Falls back to "now" when none apply. Pure — used by syncStrava and unit tests.
+function resolveSyncAfter({ lastSyncedAt, connectedAt, challengeStartDate } = {}) {
+  const floors = [];
+  if (lastSyncedAt) {
+    const d = new Date(lastSyncedAt);
+    if (!Number.isNaN(d.getTime())) {
+      d.setHours(0, 0, 0, 0);
+      floors.push(d.getTime());
+    }
+  }
+  if (challengeStartDate) {
+    const d = new Date(`${challengeStartDate}T00:00:00`);
+    if (!Number.isNaN(d.getTime())) floors.push(d.getTime());
+  }
+  // `connectedAt` is intentionally NOT a floor: the initial backfill always
+  // starts at the challenge start so every member's full challenge window is
+  // imported, even if they connected to Strava after launch. Incremental syncs
+  // resume from `lastSyncedAt`.
+  const base = floors.length ? new Date(Math.max(...floors)) : new Date();
+  return Math.floor(base.getTime() / 1000);
+}
+
 // Sync a member's Strava activities into THE 100. The cutoff defaults to the
-// start of the last sync day — or, on first sync, the day they connected — so
-// syncing starts from the day they connect. Rate-limited and deduped.
+// latest of {last sync, challenge start, connection day}, so first syncs pull
+// the whole challenge window (from 2026-09-23) and later syncs resume
+// incrementally. Imports are idempotent (upsert by strava_activity_id).
 // Returns { imported, total, rateLimited }.
 async function syncStrava(userId, { after } = {}) {
   const conn = await db('strava_connections').where({ user_id: userId }).first();
@@ -43,68 +75,86 @@ async function syncStrava(userId, { after } = {}) {
     .first();
   if (!enrollment) return { imported: 0, total: 0, rateLimited: false };
 
+  const challenge = await getActiveChallenge();
   if (!after) {
-    const from = conn.last_synced_at || conn.connected_at;
-    const d = from ? new Date(from) : new Date();
-    d.setHours(0, 0, 0, 0);
-    after = Math.floor(d.getTime() / 1000);
-    // Never go before the connection day.
-    if (conn.connected_at) {
-      const connStart = new Date(conn.connected_at);
-      connStart.setHours(0, 0, 0, 0);
-      const connSec = Math.floor(connStart.getTime() / 1000);
-      if (after < connSec) after = connSec;
-    }
+    after = resolveSyncAfter({
+      lastSyncedAt: conn.last_synced_at,
+      connectedAt: conn.connected_at,
+      challengeStartDate: challenge ? challenge.start_date : null
+    });
   }
 
-  const accessToken = await getValidAccessToken(conn);
+  let accessToken;
+  try {
+    accessToken = await getValidAccessToken(conn);
+  } catch (err) {
+    // Unreadable/expired tokens (e.g. ENCRYPTION_KEY changed) can never sync —
+    // mark the connection disconnected so the member reconnects instead of
+    // silently failing forever.
+    console.error(`Strava token error for user ${userId}:`, err.message);
+    await db('strava_connections')
+      .where({ user_id: userId })
+      .update({ status: 'disconnected', updated_at: db.fn.now() });
+    return { imported: 0, total: 0, rateLimited: false };
+  }
   if (!accessToken) return { imported: 0, total: 0, rateLimited: false };
 
+  let imported = 0;
+  let total = 0;
+  let before = null;
+  const totalBefore = await totalForEnrollment(enrollment.id);
   try {
-    const challenge = await getActiveChallenge();
-    const perPage = 50;
-    const activities = await strava.fetchRecentActivities(accessToken, { after, perPage });
-    let imported = 0;
-    const fetchedIds = activities.map((a) => a.id);
-    for (const a of activities) {
-      try {
-        const r = await importStravaActivity(enrollment, a, a.id, challenge);
-        if (r.imported) imported += 1;
-      } catch (err) {
-        if (err instanceof stravaRateLimit.RateLimitedError) {
-          return { imported, total: activities.length, rateLimited: true };
+    // Page through every activity in the window (Strava returns newest first).
+    for (let page = 0; page < MAX_SYNC_PAGES; page += 1) {
+      const activities = await strava.fetchRecentActivities(accessToken, {
+        after,
+        before: before || undefined,
+        perPage: PAGE_SIZE
+      });
+      if (!activities.length) break;
+      const batch = activities.length;
+      for (const a of activities) {
+        try {
+          const r = await importStravaActivity(enrollment, a, a.id, challenge);
+          if (r.imported) imported += 1;
+        } catch (err) {
+          if (err instanceof stravaRateLimit.RateLimitedError) {
+            return { imported, total: total + batch, rateLimited: true };
+          }
+          console.error('Strava sync import error:', err.message);
         }
-        console.error('Strava sync import error:', err.message);
       }
-    }
-
-    // Reconcile deletions: if the fetch returned the full set (not truncated by
-    // pagination), remove imported rows in this window that no longer exist on
-    // Strava (the webhook covers this on prod; this is the safety net + local).
-    if (activities.length < perPage) {
-      const cutoffDate = new Date(after * 1000).toISOString().slice(0, 10);
-      await db('challenge_activities')
-        .where({ enrollment_id: enrollment.id, source: 'strava' })
-        .where('date', '>=', cutoffDate)
-        .whereNotIn('strava_activity_id', fetchedIds.length ? fetchedIds : [0])
-        .del();
+      total += batch;
+      const oldest = activities[activities.length - 1];
+      before = Math.floor(new Date(oldest.start_date).getTime() / 1000) - 1;
+      if (batch < PAGE_SIZE) break;
     }
 
     await db('strava_connections').where({ user_id: userId }).update({ last_synced_at: db.fn.now() });
-    return { imported, total: activities.length, rateLimited: false };
+
+    // Award milestones / complete the enrollment for everything just imported
+    // (the webhook path already does this; the bulk/periodic path must too).
+    if (imported > 0) {
+      const totalValue = await totalForEnrollment(enrollment.id);
+      const user = await db('users').where({ id: userId }).first();
+      await emitProgressEvents({ enrollment, total: totalValue, user: user || { id: userId }, added: totalValue - totalBefore });
+      if (user) await sendActivityConfirm({ user, enrollment, added: totalValue - totalBefore, total: totalValue });
+    }
+
+    return { imported, total, rateLimited: false };
   } catch (err) {
     if (err instanceof stravaRateLimit.RateLimitedError) {
-      return { imported: 0, total: 0, rateLimited: true };
+      return { imported, total, rateLimited: true };
     }
     throw err;
   }
 }
 
-// One-time backfill after Strava connects (uses the connection-day cutoff).
+// One-time backfill after Strava connects (uses the challenge-start cutoff).
 async function backfillRecent(userId) {
   const result = await syncStrava(userId);
   console.log(`Strava backfill: imported ${result.imported} activities for user ${userId}`);
   return result;
 }
 
-module.exports = { getValidAccessToken, syncStrava, backfillRecent };
+module.exports = { getValidAccessToken, resolveSyncAfter, syncStrava, backfillRecent };

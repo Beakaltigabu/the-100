@@ -247,8 +247,10 @@ Import the **already-current schema** so production matches local exactly. The r
 1. cPanel **phpMyAdmin** → select `chooseyo_the100_prod` → **Import** → `db/schema.sql`.
 2. Keep `AUTO_MIGRATE=false`. Because the `knex_migrations` table ships populated,
    even a stray `AUTO_MIGRATE=true` would skip everything.
-3. Verify: 19 tables appear (`meta`, `community_announcements`,
-   `community_reports`, `community_cheers`, …).
+3. Verify: the schema imports (39 tables incl. `meta`, `community_announcements`,
+   `community_reports`, `community_cheers`, `bot_state`, `bot_settings`, `badges`,
+   `events`, …). For a DB that **already has data**, use the incremental migration
+   path instead (`DEPLOY-DATA-SAFETY.md`) — never re-import over live data.
 
 > **Future migrations**: when a new migration lands in `db/migrations/`, either
 > (a) upload it and flip `AUTO_MIGRATE=true` once (restart), then back to `false`; or

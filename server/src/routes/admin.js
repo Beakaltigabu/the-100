@@ -1,22 +1,29 @@
 const express = require('express');
 const db = require('../db');
 const config = require('../config');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, signImpersonationToken } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errors');
-const { dayNumber, enrollmentStatus } = require('../services/progress');
+const { dayNumber, enrollmentStatus, enrollmentSummary } = require('../services/progress');
 const { unitForActivity } = require('../constants');
 const { todayISO } = require('../lib/dates');
 const { APP_TIMEZONE } = require('../lib/dates');
 const { audit } = require('../lib/audit');
 const { queued } = require('../services/logger');
 const { backlog } = require('../services/queue');
+const { runScheduledJobs, checkStravaSync, pruneLogs } = require('../services/scheduler');
+const mysql = require('mysql2/promise');
 const { getActiveChallenge } = require('../services/challengeWindow');
+const { createNotification } = require('../services/notifications');
+const telegramMessenger = require('../services/telegramMessenger');
+const passwordReset = require('../services/passwordReset');
+const botMessages = require('../services/botMessages');
 const {
   createBroadcast,
   updateBroadcast,
   publishBroadcast,
   endBroadcast,
   softDeleteBroadcast,
+  restoreBroadcast,
   listBroadcasts,
   countTargets
 } = require('../services/broadcast');
@@ -31,6 +38,17 @@ function pageParams(query) {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
   const limit = Math.min(200, Math.max(1, parseInt(query.limit, 10) || 50));
   return { page, limit };
+}
+
+// Apply an inclusive date-range filter (from/to as YYYY-MM-DD) on a datetime
+// column. Bounded: only ever applies one range.
+function dateRange(q, col, query) {
+  const from = String(query.from || '').slice(0, 10);
+  const to = String(query.to || '').slice(0, 10);
+  if (from && to) q.whereBetween(col, [`${from} 00:00:00`, `${to} 23:59:59`]);
+  else if (from) q.where(col, '>=', `${from} 00:00:00`);
+  else if (to) q.where(col, '<=', `${to} 23:59:59`);
+  return q;
 }
 
 // Admin stats are expensive aggregates over the whole DB and change slowly —
@@ -77,28 +95,52 @@ router.get(
 router.get(
   '/members',
   asyncHandler(async (req, res) => {
-    // Bounded: default page size is generous enough for the current community,
-    // but the endpoint can never return an unbounded member list.
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 500));
     const search = req.query.search ? String(req.query.search).trim().slice(0, 100) : '';
+    const fStrava = req.query.strava === '1';
+    const fTelegram = req.query.telegram === '1';
+    const fInstalled = req.query.installed === '1';
+    const fActive = req.query.active === '1';
     const challenge = await getActiveChallenge();
     const challengeId = challenge ? challenge.id : 0;
-    const totalRow = await db('enrollments').where({ challenge_id: challengeId }).count({ c: '*' }).first();
-    const rows = await db('enrollments')
-      .join('users', 'users.id', 'enrollments.user_id')
-      .leftJoin('telegram_connections', 'telegram_connections.user_id', 'enrollments.user_id')
-      .leftJoin('strava_connections', 'strava_connections.user_id', 'enrollments.user_id')
-      .where({ 'enrollments.challenge_id': challengeId })
-      .modify((q) => {
-        if (search) q.where((b) => b.where('users.name', 'like', `%${search}%`).orWhere('users.email', 'like', `%${search}%`));
-      })
+    const since7 = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+
+    // All users (left-join enrollment/connections) so admins see everyone,
+    // including those who installed or connected but haven't enrolled yet.
+    const build = () =>
+      db('users')
+        .leftJoin('enrollments', function () {
+          this.on('enrollments.user_id', 'users.id').andOn('enrollments.challenge_id', challengeId);
+        })
+        .leftJoin('telegram_connections', 'telegram_connections.user_id', 'users.id')
+        .leftJoin('strava_connections', 'strava_connections.user_id', 'users.id')
+        .modify((q) => {
+          if (search) q.where((b) => b.where('users.name', 'like', `%${search}%`).orWhere('users.email', 'like', `%${search}%`));
+          if (fStrava) q.where('strava_connections.status', 'connected');
+          if (fTelegram) q.where('telegram_connections.state', 'active');
+          if (fInstalled) q.where('users.pwa_installed', true);
+          if (fActive) {
+            q.whereExists(
+              db('challenge_activities')
+                .join('enrollments as e2', 'e2.id', 'challenge_activities.enrollment_id')
+                .whereRaw('e2.user_id = users.id')
+                .where('challenge_activities.date', '>=', since7)
+            );
+          }
+          dateRange(q, 'users.created_at', req.query);
+        });
+
+    const totalRow = await build().clearSelect().countDistinct({ c: 'users.id' }).first();
+    const rows = await build()
       .select(
-        'enrollments.id as enrollment_id',
         'users.id as user_id',
         'users.name',
         'users.email',
         'users.created_at as joined',
+        'users.pwa_installed',
+        'users.banned_at',
+        'enrollments.id as enrollment_id',
         'enrollments.goal_value',
         'enrollments.activity_type',
         'enrollments.status',
@@ -106,55 +148,62 @@ router.get(
         'telegram_connections.state as telegram_state',
         'strava_connections.status as strava_status'
       )
-      .orderBy('enrollments.created_at', 'desc')
+      .orderBy('users.created_at', 'desc')
       .limit(limit)
       .offset((page - 1) * limit);
 
-    // Batch the per-member aggregates into 2 grouped queries (kills the N+1).
-    const enrollmentIds = rows.map((r) => r.enrollment_id);
-    const totalRows = enrollmentIds.length
-      ? await db('challenge_activities')
-          .whereIn('enrollment_id', enrollmentIds)
-          .groupBy('enrollment_id')
-          .select('enrollment_id')
-          .sum({ total: 'quantity' })
-      : [];
-    const lastRows = enrollmentIds.length
-      ? await db('challenge_activities')
-          .whereIn('enrollment_id', enrollmentIds)
-          .groupBy('enrollment_id')
-          .select('enrollment_id')
-          .max({ last: 'date' })
-      : [];
+    const enrollmentIds = rows.map((r) => r.enrollment_id).filter(Boolean);
+    const userIds = rows.map((r) => r.user_id);
+    const [totalRows, lastRows, lastSeenRows, sessionRows] = await Promise.all([
+      enrollmentIds.length
+        ? db('challenge_activities').whereIn('enrollment_id', enrollmentIds).groupBy('enrollment_id').select('enrollment_id').sum({ total: 'quantity' })
+        : [],
+      enrollmentIds.length
+        ? db('challenge_activities').whereIn('enrollment_id', enrollmentIds).groupBy('enrollment_id').select('enrollment_id').max({ last: 'date' })
+        : [],
+      userIds.length
+        ? db('request_logs').whereIn('user_id', userIds).groupBy('user_id').select('user_id').max({ lastSeen: 'created_at' })
+        : [],
+      userIds.length
+        ? db('session_logs').whereIn('user_id', userIds).groupBy('user_id').select('user_id').sum({ sessionSeconds: 'duration_seconds' })
+        : []
+    ]);
     const totalById = {};
     const lastById = {};
+    const lastSeenById = {};
+    const sessionById = {};
     for (const r of totalRows) totalById[r.enrollment_id] = Number(r.total) || 0;
     for (const r of lastRows) lastById[r.enrollment_id] = r.last;
+    for (const r of lastSeenRows) lastSeenById[r.user_id] = r.lastSeen;
+    for (const r of sessionRows) sessionById[r.user_id] = Number(r.sessionSeconds) || 0;
 
     const today = todayISO();
     const startDate = challenge ? challenge.start_date : null;
 
     const members = rows.map((row) => {
+      const enrolled = !!row.enrollment_id;
       const total = totalById[row.enrollment_id] || 0;
       const last = lastById[row.enrollment_id] || null;
-      const day = dayNumber(startDate || row.start_date, today);
-      const status = enrollmentStatus(
-        { status: row.status, goal_value: row.goal_value, start_date: row.start_date },
-        total,
-        last
-      );
+      const day = enrolled ? dayNumber(startDate || row.start_date, today) : null;
+      const status = enrolled
+        ? enrollmentStatus({ status: row.status, goal_value: row.goal_value, start_date: row.start_date }, total, last)
+        : 'not_enrolled';
       return {
         id: row.user_id,
         name: row.name,
         email: row.email,
         joined: row.joined,
-        goalValue: Number(row.goal_value),
-        goalUnit: unitForActivity(row.activity_type),
-        progress: Math.round(total * 100) / 100,
+        goalValue: enrolled ? Number(row.goal_value) : null,
+        goalUnit: enrolled ? unitForActivity(row.activity_type) : null,
+        progress: enrolled ? Math.round(total * 100) / 100 : 0,
         day,
         status,
         telegram: row.telegram_state === 'active',
-        strava: row.strava_status === 'connected'
+        strava: row.strava_status === 'connected',
+        installed: !!row.pwa_installed,
+        banned: !!row.banned_at,
+        lastSeen: lastSeenById[row.user_id] || null,
+        sessionSeconds: sessionById[row.user_id] || 0
       };
     });
 
@@ -175,13 +224,37 @@ router.get(
       ? await db('enrollments').where({ user_id: user.id, challenge_id: challenge.id }).first()
       : null;
 
-    const activities = enrollment
-      ? await db('challenge_activities').where({ enrollment_id: enrollment.id }).orderBy('date', 'desc').limit(50)
-      : [];
-
-    const telegram = await db('telegram_connections').where({ user_id: user.id }).first();
-    const strava = await db('strava_connections').where({ user_id: user.id }).first();
-    const adminRow = await db('admins').where({ user_id: user.id }).first();
+    const monthAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+    const [activities, telegram, strava, adminRow, summary, activityDaysRow, posts, cheersGiven, cheersReceived, notifTotal, notifUnread, lastReq, req30, sessionAgg, auditRows] = await Promise.all([
+      enrollment
+        ? db('challenge_activities').where({ enrollment_id: enrollment.id }).orderBy('date', 'desc').limit(50)
+        : [],
+      db('telegram_connections').where({ user_id: user.id }).first(),
+      db('strava_connections').where({ user_id: user.id }).first(),
+      db('admins').where({ user_id: user.id }).first(),
+      enrollment ? enrollmentSummary(enrollment.id) : null,
+      enrollment
+        ? db('challenge_activities').where({ enrollment_id: enrollment.id }).countDistinct({ c: 'date' }).first()
+        : null,
+      db('community_posts').where({ user_id: user.id }).count({ c: '*' }).first(),
+      db('post_cheers').where({ user_id: user.id }).count({ c: '*' }).first(),
+      db('post_cheers')
+        .join('community_posts', 'community_posts.id', 'post_cheers.post_id')
+        .where('community_posts.user_id', user.id)
+        .count({ c: '*' })
+        .first(),
+      db('notifications').where({ user_id: user.id }).count({ c: '*' }).first(),
+      db('notifications').where({ user_id: user.id }).whereNull('read_at').count({ c: '*' }).first(),
+      db('request_logs').where({ user_id: user.id }).orderBy('created_at', 'desc').first(),
+      db('request_logs').where({ user_id: user.id }).where('created_at', '>=', monthAgo).count({ c: '*' }).first(),
+      db('session_logs').where({ user_id: user.id }).sum({ s: 'duration_seconds' }).count({ n: '*' }).first(),
+      db('admin_audit_log')
+        .leftJoin('users', 'users.id', 'admin_audit_log.admin_user_id')
+        .where({ 'admin_audit_log.target_type': 'user', 'admin_audit_log.target_id': user.id })
+        .select('admin_audit_log.action', 'admin_audit_log.created_at as ts', 'users.name as admin_name')
+        .orderBy('admin_audit_log.created_at', 'desc')
+        .limit(50)
+    ]);
 
     res.json({
       user: {
@@ -196,16 +269,30 @@ router.get(
         activityType: user.activity_type,
         otherActivity: user.other_activity || null,
         language: user.language || 'en',
+        onboardingComplete: !!user.onboarding_complete,
         banned: !!user.banned_at,
-        isAdmin: !!adminRow
+        isAdmin: !!adminRow,
+        pwaInstalled: !!user.pwa_installed,
+        installedAt: user.installed_at,
+        notes: user.notes || null
       },
-      enrollment: enrollment
+      enrollment: summary
         ? {
-            goalValue: Number(enrollment.goal_value),
-            goalUnit: unitForActivity(enrollment.activity_type),
-            status: enrollment.status,
-            startDate: enrollment.start_date,
-            endDate: enrollment.end_date
+            goalValue: summary.enrollment.goalValue,
+            goalUnit: summary.enrollment.goalUnit,
+            activityType: summary.enrollment.activityType,
+            status: summary.enrollment.status,
+            startDate: summary.enrollment.startDate,
+            endDate: summary.enrollment.endDate,
+            day: summary.enrollment.day,
+            totalValue: summary.totalValue,
+            percent: summary.percent,
+            thisWeekValue: summary.thisWeekValue,
+            thisWeekActivities: summary.thisWeekActivities,
+            nextMilestone: summary.nextMilestone,
+            milestones: summary.milestones,
+            statusReason: summary.status,
+            activityDays: Number(activityDaysRow.c)
           }
         : null,
       activities: activities.map((a) => ({
@@ -216,9 +303,36 @@ router.get(
         source: a.source
       })),
       integrations: {
-        telegram: telegram ? { state: telegram.state } : { state: 'not_connected' },
-        strava: strava ? { status: strava.status } : { status: 'not_connected' }
-      }
+        telegram: telegram
+          ? { state: telegram.state, telegramUserId: telegram.telegram_user_id, linkedAt: telegram.connected_at }
+          : { state: 'not_connected' },
+        strava: strava
+          ? {
+              status: strava.status,
+              athleteId: strava.strava_athlete_id,
+              scope: strava.scope,
+              connectedAt: strava.connected_at,
+              disconnectedAt: strava.disconnected_at,
+              lastSyncedAt: strava.last_synced_at
+            }
+          : { status: 'not_connected' }
+      },
+      engagement: {
+        lastSeen: lastReq ? lastReq.created_at : null,
+        requests30d: Number(req30.c),
+        sessionSeconds: Number(sessionAgg.s) || 0,
+        sessionCount: Number(sessionAgg.n) || 0
+      },
+      community: {
+        posts: Number(posts.c),
+        cheersGiven: Number(cheersGiven.c),
+        cheersReceived: Number(cheersReceived.c)
+      },
+      notifications: {
+        total: Number(notifTotal.c),
+        unread: Number(notifUnread.c)
+      },
+      adminHistory: auditRows
     });
   })
 );
@@ -242,6 +356,10 @@ router.patch(
     if (req.body.language !== undefined && ['en', 'am'].includes(req.body.language)) updates.language = req.body.language;
     if (req.body.experience_level !== undefined) updates.experience_level = String(req.body.experience_level).slice(0, 30);
     if (req.body.weekly_baseline !== undefined) updates.weekly_baseline = req.body.weekly_baseline === null ? null : Number(req.body.weekly_baseline);
+    if (req.body.activity_type !== undefined && req.body.activity_type) updates.activity_type = String(req.body.activity_type).slice(0, 30);
+    if (req.body.location !== undefined) updates.location = req.body.location ? String(req.body.location).slice(0, 120) : null;
+    if (req.body.age !== undefined) updates.age = req.body.age === null ? null : Math.max(0, Math.min(120, Number(req.body.age) || 0));
+    if (req.body.notes !== undefined) updates.notes = req.body.notes ? String(req.body.notes).slice(0, 2000) : null;
     if (!Object.keys(updates).length) return res.status(400).json({ error: 'Nothing to update' });
     await db('users').where({ id: user.id }).update(updates);
     audit(req.user.id, 'member_update', 'user', user.id, req.ip);
@@ -321,6 +439,158 @@ router.post(
   })
 );
 
+// Send a nudge to a single member (in-app + Telegram DM if linked).
+router.post(
+  '/members/:id/nudge',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    const message = (req.body && req.body.message ? String(req.body.message).trim() : '') ||
+      'Your 100 is waiting — check in today!';
+    await createNotification({
+      userId: user.id,
+      type: 'nudge',
+      title: 'A nudge from the team',
+      body: message,
+      force: true
+    });
+    telegramMessenger.sendToUser(user.id, `A nudge from the team\n\n${message}`);
+    audit(req.user.id, 'member_nudge', 'user', user.id, req.ip);
+    res.json({ message: 'Nudge sent' });
+  })
+);
+
+// Start an impersonation session (admin views the app "as" this member).
+router.post(
+  '/members/:id/impersonate',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    if (user.banned_at) return res.status(409).json({ error: 'Member is banned' });
+    const token = signImpersonationToken(req.user.id, user.id);
+    audit(req.user.id, 'impersonate_start', 'user', user.id, req.ip);
+    res.json({ token, member: { id: user.id, name: user.name } });
+  })
+);
+
+// Send a free-form message to a member (Telegram DM when linked, else in-app).
+router.post(
+  '/members/:id/message',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    const text = req.body && req.body.message ? String(req.body.message).trim().slice(0, 2000) : '';
+    if (!text) return res.status(400).json({ error: 'Message is required' });
+
+    const conn = await db('telegram_connections').where({ user_id: user.id, state: 'active' }).first();
+    if (conn && conn.telegram_user_id) {
+      telegramMessenger.sendToUser(user.id, text);
+      await createNotification({ userId: user.id, type: 'announcement', title: 'A message from the team', body: text, force: true });
+    } else {
+      await createNotification({ userId: user.id, type: 'announcement', title: 'A message from the team', body: text, force: true });
+    }
+    audit(req.user.id, 'member_message', 'user', user.id, req.ip);
+    res.json({ message: 'Message sent', delivered: !!(conn && conn.telegram_user_id) });
+  })
+);
+
+// Generate a password reset link (delivered via the member's Telegram DM; the
+// link is returned to the admin when the member has no Telegram connection).
+router.post(
+  '/members/:id/reset-password',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    passwordReset.pruneExpired().catch(() => {});
+    const token = await passwordReset.createResetToken(user.id);
+    const url = `${config.clientOrigin}/reset-password?token=${token}`;
+    const conn = await db('telegram_connections').where({ user_id: user.id, state: 'active' }).first();
+    if (conn && conn.telegram_user_id) {
+      const lang = await telegramMessenger.getUserLanguage(user.id);
+      telegramMessenger.sendToUser(user.id, botMessages.resetLink(lang, url));
+      audit(req.user.id, 'member_reset_password', 'user', user.id, req.ip);
+      res.json({ message: 'Reset link sent to their Telegram.' });
+    } else {
+      audit(req.user.id, 'member_reset_password', 'user', user.id, req.ip);
+      res.json({ message: 'Reset link generated (no Telegram connected).', resetLink: url });
+    }
+  })
+);
+
+// Adjust a member's enrollment: goal_value / activity_type / status lifecycle.
+router.post(
+  '/members/:id/enrollment',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    const challenge = await getActiveChallenge();
+    const enrollment = challenge
+      ? await db('enrollments').where({ user_id: user.id, challenge_id: challenge.id }).first()
+      : null;
+    if (!enrollment) return res.status(404).json({ error: 'Member has no enrollment' });
+
+    const updates = {};
+    if (req.body.goal_value != null) updates.goal_value = Math.max(1, Math.min(10000, Number(req.body.goal_value) || 0));
+    if (req.body.activity_type !== undefined && req.body.activity_type) updates.activity_type = String(req.body.activity_type).slice(0, 30);
+    if (req.body.status === 'completed') updates.status = 'completed';
+    if (req.body.status === 'active' || req.body.status === 'committed') updates.status = req.body.status;
+    if (Object.keys(updates).length) {
+      await db('enrollments').where({ id: enrollment.id }).update(updates);
+    }
+    audit(req.user.id, 'member_enrollment_edit', 'user', user.id, req.ip);
+    res.json({ message: 'Enrollment updated' });
+  })
+);
+
+// Admin-initiated disconnect of an integration (strava | telegram).
+router.post(
+  '/members/:id/disconnect',
+  asyncHandler(async (req, res) => {
+    const user = await db('users').where({ id: req.params.id }).first();
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    const integration = req.body && req.body.integration;
+    if (integration === 'strava') {
+      const conn = await db('strava_connections').where({ user_id: user.id }).first();
+      if (conn && conn.status === 'connected') {
+        try {
+          const { decrypt } = require('../lib/crypto');
+          const token = conn.encrypted_access_token ? decrypt(conn.encrypted_access_token) : null;
+          if (token) await require('../services/strava').deauthorize(token).catch(() => {});
+        } catch {}
+      }
+      await db('strava_connections').where({ user_id: user.id }).update({
+        encrypted_access_token: null,
+        encrypted_refresh_token: null,
+        token_expires_at: null,
+        strava_athlete_id: null,
+        scope: null,
+        status: 'disconnected',
+        disconnected_at: db.fn.now(),
+        last_synced_at: null,
+        updated_at: db.fn.now()
+      });
+      await db('challenge_activities')
+        .where({ source: 'strava' })
+        .whereIn('enrollment_id', db('enrollments').where({ user_id: user.id }).select('id'))
+        .del();
+      audit(req.user.id, 'disconnect_strava', 'user', user.id, req.ip);
+      res.json({ message: 'Strava disconnected' });
+    } else if (integration === 'telegram') {
+      await db('telegram_connections').where({ user_id: user.id }).update({
+        state: 'not_connected',
+        telegram_user_id: null,
+        link_token_hash: null,
+        link_expires_at: null,
+        updated_at: db.fn.now()
+      });
+      audit(req.user.id, 'disconnect_telegram', 'user', user.id, req.ip);
+      res.json({ message: 'Telegram disconnected' });
+    } else {
+      return res.status(400).json({ error: "integration must be 'strava' or 'telegram'" });
+    }
+  })
+);
+
 // ── Analytics ─────────────────────────────────────────
 router.get(
   '/analytics',
@@ -331,7 +601,7 @@ router.get(
     const monthAgo = new Date(now - 30 * 24 * 3600 * 1000);
     const seriesSince = new Date(now - 29 * 24 * 3600 * 1000);
 
-    const [dau, wau, mau, totalUsers, onboarded, newUsers30, enrolled, activeMembers, completed, activitySeries, userSeries] = await Promise.all([
+    const [dau, wau, mau, totalUsers, onboarded, newUsers30, enrolled, activeMembers, completed, installed, stravaConnected, telegramActive, sessionAgg, activitySeries, userSeries] = await Promise.all([
       db('request_logs').where('created_at', '>=', dayAgo).countDistinct({ c: 'user_id' }).first(),
       db('request_logs').where('created_at', '>=', weekAgo).countDistinct({ c: 'user_id' }).first(),
       db('request_logs').where('created_at', '>=', monthAgo).countDistinct({ c: 'user_id' }).first(),
@@ -341,6 +611,10 @@ router.get(
       db('enrollments').count({ c: '*' }).first(),
       db('enrollments').whereIn('status', ['committed', 'active']).countDistinct({ c: 'user_id' }).first(),
       db('enrollments').where({ status: 'completed' }).count({ c: '*' }).first(),
+      db('users').where({ pwa_installed: true }).count({ c: '*' }).first(),
+      db('strava_connections').where({ status: 'connected' }).count({ c: '*' }).first(),
+      db('telegram_connections').where({ state: 'active' }).count({ c: '*' }).first(),
+      db('session_logs').sum({ s: 'duration_seconds' }).countDistinct({ n: 'user_id' }).first(),
       db('challenge_activities')
         .where('date', '>=', seriesSince.toISOString().slice(0, 10))
         .select(db.raw('DATE(date) as d'))
@@ -354,23 +628,77 @@ router.get(
         .groupByRaw('DATE(created_at)')
     ]);
 
+    // Weekly retention cohorts (last 6 weeks). Computed in JS from a bounded set.
+    const cohortSince = new Date(now - 6 * 7 * 24 * 3600 * 1000);
+    const cohortUsers = await db('users').where('created_at', '>=', cohortSince).select('id', 'created_at');
+    const cohortIds = cohortUsers.map((u) => u.id);
+    const activeWeeks = cohortIds.length
+      ? await db('request_logs')
+          .whereIn('user_id', cohortIds)
+          .where('created_at', '>=', cohortSince)
+          .distinct('user_id')
+          .select('user_id')
+          .select(db.raw('YEARWEEK(created_at) as wk'))
+      : [];
+    const weekLabel = (d) => {
+      const dt = new Date(d);
+      const y = dt.getFullYear();
+      const oneJan = new Date(y, 0, 1);
+      const wk = Math.ceil(((dt - oneJan) / 86400000 + oneJan.getDay() + 1) / 7);
+      return `${y}-${String(wk).padStart(2, '0')}`;
+    };
+    const activeByUser = new Set();
+    for (const r of activeWeeks) activeByUser.add(`${r.user_id}:${r.wk}`);
+    const cohortMap = {};
+    for (const u of cohortUsers) {
+      const wk = weekLabel(u.created_at);
+      (cohortMap[wk] = cohortMap[wk] || []).push(u.id);
+    }
+    const allCohortWeeks = Object.keys(cohortMap).sort();
+    const cohortWeeks = allCohortWeeks.slice(0, 6);
+    const cohorts = cohortWeeks.map((wk) => {
+      const members = cohortMap[wk];
+      const row = { week: wk, size: members.length, retention: [] };
+      let idx = 0;
+      for (const cw of cohortWeeks.slice(cohortWeeks.indexOf(wk))) {
+        const count = members.filter((uid) => activeByUser.has(`${uid}:${cw}`)).length;
+        row.retention.push({ week: cw, count, pct: members.length ? Math.round((count / members.length) * 100) : 0 });
+        idx += 1;
+      }
+      return row;
+    });
+
+    const dauN = Number(dau.c);
+    const mauN = Number(mau.c);
+
     res.json({
-      dau: Number(dau.c),
+      dau: dauN,
       wau: Number(wau.c),
-      mau: Number(mau.c),
+      mau: mauN,
+      stickiness: mauN > 0 ? Math.round((dauN / mauN) * 100) / 100 : 0,
       totalUsers: Number(totalUsers.c),
       onboarded: Number(onboarded.c),
       newUsers30d: Number(newUsers30.c),
       enrolled: Number(enrolled.c),
       activeMembers: Number(activeMembers.c),
       completed: Number(completed.c),
+      installed: Number(installed.c),
+      connections: {
+        strava: Number(stravaConnected.c),
+        telegram: Number(telegramActive.c),
+        installed: Number(installed.c)
+      },
+      sessionSeconds: Number(sessionAgg.s) || 0,
+      sessionUsers: Number(sessionAgg.n) || 0,
       funnel: {
         registered: Number(totalUsers.c),
+        installed: Number(installed.c),
         onboarded: Number(onboarded.c),
         enrolled: Number(enrolled.c),
         active: Number(activeMembers.c),
         completed: Number(completed.c)
       },
+      cohorts,
       activitySeries: activitySeries.map((r) => ({ day: r.d, count: Number(r.c), km: Math.round(Number(r.km || 0) * 100) / 100 })),
       userSeries: userSeries.map((r) => ({ day: r.d, count: Number(r.c) }))
     });
@@ -380,7 +708,8 @@ router.get(
 router.get(
   '/audit',
   asyncHandler(async (req, res) => {
-    const rows = await db('admin_audit_log')
+    const { page, limit } = pageParams(req.query);
+    const q = db('admin_audit_log')
       .join('users', 'users.id', 'admin_audit_log.admin_user_id')
       .select(
         'admin_audit_log.id',
@@ -390,10 +719,15 @@ router.get(
         'admin_audit_log.ip',
         'admin_audit_log.created_at as ts',
         'users.name'
-      )
+      );
+    if (req.query.action) q.where('admin_audit_log.action', 'like', `%${String(req.query.action).slice(0, 60)}%`);
+    dateRange(q, 'admin_audit_log.created_at', req.query);
+    const totalRow = await q.clone().clearSelect().count({ c: '*' }).first();
+    const rows = await q
       .orderBy('admin_audit_log.created_at', 'desc')
-      .limit(100);
-    res.json({ entries: rows });
+      .limit(limit)
+      .offset((page - 1) * limit);
+    res.json({ entries: rows, total: Number(totalRow.c), page, limit });
   })
 );
 
@@ -528,6 +862,82 @@ router.get(
   })
 );
 
+// Run the scheduled-jobs cycle on demand (plus the Strava safety-net sync).
+router.post(
+  '/system/run-jobs',
+  asyncHandler(async (req, res) => {
+    const { ran } = await runScheduledJobs();
+    // Strava safety-net pull on demand (guarded against concurrent runs).
+    if (ran) await checkStravaSync().catch((err) => console.error('checkStravaSync failed:', err.message));
+    audit(req.user.id, 'scheduler_run', 'system', 0, req.ip);
+    res.json({ ran, message: ran ? 'Scheduled jobs completed' : 'Scheduler already running' });
+  })
+);
+
+// One-time full Strava backfill: re-open every connected member's sync window to
+// the challenge start (2026-09-23), then run the safety-net sync. Idempotent —
+// imports upsert by strava_activity_id, so re-pulling never duplicates rows.
+router.post(
+  '/system/backfill-strava',
+  asyncHandler(async (req, res) => {
+    const reset = await db('strava_connections')
+      .where({ status: 'connected' })
+      .update({ last_synced_at: null, updated_at: db.fn.now() });
+    await checkStravaSync().catch((err) => console.error('checkStravaSync failed:', err.message));
+    audit(req.user.id, 'strava_backfill', 'system', 0, req.ip);
+    const n = Number(reset) || 0;
+    res.json({ reset: n, message: n ? `Strava backfill triggered for ${n} connection(s)` : 'No connected Strava connections to backfill' });
+  })
+);
+
+// Temporary diagnostic: test TCP+TLS reachability of a target MySQL host FROM
+// THIS server (e.g. cPanel -> Aiven). No credentials needed — a completed
+// handshake (even an auth rejection) proves the host:port is reachable.
+router.post(
+  '/system/test-mysql',
+  asyncHandler(async (req, res) => {
+    const host = String(req.body.host || '').trim();
+    const port = Number(req.body.port || 3306);
+    if (!host) return res.status(400).json({ error: 'host is required' });
+    let c;
+    try {
+      c = await mysql.createConnection({
+        host,
+        port,
+        user: 'probe',
+        password: 'probe',
+        connectTimeout: 6000,
+        ssl: { rejectUnauthorized: false }
+      });
+      await c.query('SELECT 1');
+      await c.end().catch(() => {});
+      return res.json({ reachable: true, host, port, detail: 'connected' });
+    } catch (err) {
+      if (c) await c.end().catch(() => {});
+      const code = String(err.code || '');
+      const networkish = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|ECONNRESET|EPIPE|EHOSTUNREACH|ENETUNREACH|EAI_AGAIN/.test(code);
+      const handshake = code === 'ER_ACCESS_DENIED_ERROR' || code === 'ER_HOST_NOT_PRIVILEGED' || code === 'ER_HOST_IS_BLOCKED';
+      return res.json({
+        reachable: handshake,
+        host,
+        port,
+        code,
+        detail: handshake ? 'reachable (server responded — auth rejected, expected for probe creds)' : networkish ? 'unreachable (network / firewall)' : 'unknown'
+      });
+    }
+  })
+);
+
+// Force the log prune (ignores the once-per-day guard).
+router.post(
+  '/system/flush-logs',
+  asyncHandler(async (req, res) => {
+    const { ran, removed } = await pruneLogs({ force: true });
+    audit(req.user.id, 'log_flush', 'system', 0, req.ip);
+    res.json({ ran, removed, message: ran ? `Pruned ${removed} log rows` : 'Logs already pruned today' });
+  })
+);
+
 router.get(
   '/logs/stats',
   asyncHandler(async (req, res) => {
@@ -597,6 +1007,7 @@ router.get(
     if (req.query.status) q.where({ status: parseInt(req.query.status, 10) });
     if (req.query.source) q.where({ source: String(req.query.source).slice(0, 20) });
     if (req.query.path) q.where('path', 'like', `%${String(req.query.path).slice(0, 100)}%`);
+    dateRange(q, 'created_at', req.query);
     const totalRow = await q.clone().count({ c: '*' }).first();
     const rows = await q.orderBy('id', 'desc').limit(limit).offset((page - 1) * limit);
     res.json({ entries: rows, total: Number(totalRow.c), page, limit });
@@ -609,6 +1020,7 @@ router.get(
     const { page, limit } = pageParams(req.query);
     const q = db('error_logs');
     if (req.query.level) q.where({ level: String(req.query.level).slice(0, 10) });
+    dateRange(q, 'created_at', req.query);
     const totalRow = await q.clone().count({ c: '*' }).first();
     const rows = await q.orderBy('id', 'desc').limit(limit).offset((page - 1) * limit);
     res.json({ entries: rows, total: Number(totalRow.c), page, limit });
@@ -622,6 +1034,7 @@ router.get(
     const q = db('event_logs');
     if (req.query.source) q.where({ source: String(req.query.source).slice(0, 30) });
     if (req.query.type) q.where('type', 'like', `%${String(req.query.type).slice(0, 60)}%`);
+    dateRange(q, 'created_at', req.query);
     const totalRow = await q.clone().count({ c: '*' }).first();
     const rows = await q.orderBy('id', 'desc').limit(limit).offset((page - 1) * limit);
     res.json({ entries: rows, total: Number(totalRow.c), page, limit });
@@ -670,6 +1083,7 @@ function serializeBroadcastRow(b) {
     scheduledAt: b.scheduled_at,
     publishedAt: b.published_at,
     endedAt: b.ended_at,
+    deletedAt: b.deleted_at,
     groupSent: !!b.group_sent,
     adminName: b.admin_name || null,
     createdAt: b.created_at
@@ -686,7 +1100,16 @@ router.get(
   '/broadcasts',
   asyncHandler(async (req, res) => {
     const status = req.query.status && BROADCAST_STATUS.includes(req.query.status) ? req.query.status : null;
-    const rows = await listBroadcasts({ status, limit: req.query.limit ? parseInt(req.query.limit, 10) : 50 });
+    const includeDeleted = req.query.deleted === '1';
+    const { page, limit } = pageParams(req.query);
+    const { rows, total } = await listBroadcasts({
+      status,
+      limit,
+      includeDeleted,
+      page,
+      from: req.query.from,
+      to: req.query.to
+    });
     const ids = rows.map((b) => b.id);
     const recipients = ids.length
       ? await db('broadcast_recipients')
@@ -704,7 +1127,10 @@ router.get(
       broadcasts: rows.map((b) => ({
         ...serializeBroadcastRow(b),
         delivery: deliveryById[b.id] || { inapp: 0, telegram: 0 }
-      }))
+      })),
+      total,
+      page,
+      limit
     });
   })
 );
@@ -803,6 +1229,17 @@ router.post(
   })
 );
 
+router.post(
+  '/broadcasts/:id/restore',
+  asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const result = await restoreBroadcast(id);
+    if (!result) return res.status(404).json({ error: 'Broadcast not found or not archived' });
+    audit(req.user.id, 'broadcast_restore', 'broadcast', id, req.ip);
+    res.json({ message: 'Broadcast restored', broadcast: serializeBroadcastRow(result) });
+  })
+);
+
 router.delete(
   '/broadcasts/:id',
   asyncHandler(async (req, res) => {
@@ -819,9 +1256,10 @@ router.get(
   '/contact',
   asyncHandler(async (req, res) => {
     const { page, limit } = pageParams(req.query);
-    const base = db('contact_messages');
-    if (req.query.status) base.where({ status: String(req.query.status).slice(0, 20) });
-    const totalRow = await base.clone().count({ c: '*' }).first();
+    const q = db('contact_messages');
+    if (req.query.status) q.where({ status: String(req.query.status).slice(0, 20) });
+    dateRange(q, 'created_at', req.query);
+    const totalRow = await q.clone().count({ c: '*' }).first();
 
     const rows = await db('contact_messages')
       .leftJoin('users', 'users.id', 'contact_messages.user_id')
@@ -835,8 +1273,9 @@ router.get(
         'contact_messages.replied_at',
         'users.name as account_name'
       )
-      .modify((q) => {
-        if (req.query.status) q.where({ 'contact_messages.status': String(req.query.status).slice(0, 20) });
+      .modify((b) => {
+        if (req.query.status) b.where({ 'contact_messages.status': String(req.query.status).slice(0, 20) });
+        dateRange(b, 'contact_messages.created_at', req.query);
       })
       .orderBy('contact_messages.id', 'desc')
       .limit(limit)

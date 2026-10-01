@@ -1,8 +1,6 @@
 const config = require('../config');
 const db = require('../db');
 const { enqueue } = require('./queue');
-const botMessages = require('./botMessages');
-const { getActiveChallenge, hasChallengeStarted } = require('./challengeWindow');
 const { logEvent } = require('./logger');
 
 function configured() {
@@ -15,12 +13,19 @@ function dryRun() {
   return process.env.TELEGRAM_DRY_RUN === 'true';
 }
 
+// Deliver delay for outbound sends (default 2000ms). Integration tests set
+// TELEGRAM_SEND_DELAY=0 so sends drain deterministically.
+function sendDelay() {
+  const n = Number(process.env.TELEGRAM_SEND_DELAY);
+  return Number.isFinite(n) && n >= 0 ? n : 2000;
+}
+
 async function deliver(chatId, text, markup) {
   if (dryRun()) {
     logEvent({
       source: 'bot',
       type: 'send_dry_run',
-      message: `[dry-run] to ${chatId}: ${String(text).slice(0, 200)}`
+      message: `[dry-run] to ${chatId}${markup ? ' [kb]' : ''}: ${String(text).slice(0, 200)}`
     });
     return;
   }
@@ -57,8 +62,24 @@ async function getUserLanguage(userId) {
   return (user && user.language) || 'en';
 }
 
-// Send a DM to a linked member (fire-and-forget, retried on failure).
-function sendToUser(userId, text) {
+// Acknowledge a button press (callback_query) so Telegram clears the spinner.
+async function answerCallbackQuery(callbackQueryId, text) {
+  const payload = { callback_query_id: callbackQueryId };
+  if (text) payload.text = text;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${config.telegram.botToken}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) logEvent({ source: 'bot', type: 'callback_answer_fail', message: `answerCallbackQuery failed: ${res.status}` });
+  } catch (err) {
+    console.error('answerCallbackQuery error:', err.message);
+  }
+}
+
+// ── Send a DM to a linked member (fire-and-forget, retried on failure).
+function sendToUser(userId, text, markup) {
   if (!configured()) return;
   enqueue(
     async () => {
@@ -67,23 +88,23 @@ function sendToUser(userId, text) {
         // Global ban: never message a banned account.
         const user = await db('users').where({ id: userId }).first();
         if (user && user.banned_at) return;
-        await deliver(conn.telegram_user_id, text);
+        await deliver(conn.telegram_user_id, text, markup);
       }
     },
-    { maxAttempts: 3, delay: 2000 }
+    { maxAttempts: 3, delay: sendDelay() }
   );
 }
 
 // Post to the brand's group/channel (no-op until TELEGRAM_GROUP_ID is set).
 function sendToGroup(text) {
   if (!configured() || !config.telegram.groupId) return;
-  enqueue(() => deliver(config.telegram.groupId, text), { maxAttempts: 3, delay: 2000 });
+  enqueue(() => deliver(config.telegram.groupId, text), { maxAttempts: 3, delay: sendDelay() });
 }
 
 // Reply to a specific chat (used by the webhook handler).
 function sendToChat(chatId, text, markup) {
   if (!configured()) return;
-  enqueue(() => deliver(chatId, text, markup), { maxAttempts: 3, delay: 2000 });
+  enqueue(() => deliver(chatId, text, markup), { maxAttempts: 3, delay: sendDelay() });
 }
 
 // Inline "JOIN THE COMMUNITY" button pointing at the private community group.
@@ -112,29 +133,6 @@ async function approveJoinRequest(chatId, userId) {
   return true;
 }
 
-// Group broadcasts only go out once the challenge has started (keeps the group clean pre-launch).
-async function groupLive() {
-  if (!configured() || !config.telegram.groupId) return false;
-  const challenge = await getActiveChallenge();
-  return hasChallengeStarted(challenge);
-}
-
-async function broadcastMilestone(name, threshold, unit) {
-  if (await groupLive()) sendToGroup(botMessages.groupMilestone(name, threshold, unit));
-}
-
-async function broadcastFinish(name, goal, unit) {
-  if (await groupLive()) sendToGroup(botMessages.groupFinish(name, goal, unit));
-}
-
-async function broadcastJoin(name) {
-  if (await groupLive()) sendToGroup(botMessages.groupJoin(name));
-}
-
-async function broadcastDigest(checked, milestones, finishers) {
-  if (await groupLive()) sendToGroup(botMessages.groupDigest(checked, milestones, finishers));
-}
-
 // Reads the currently registered webhook. Returns null when the bot isn't
 // configured or Telegram is unreachable.
 async function getWebhookInfo() {
@@ -157,8 +155,5 @@ module.exports = {
   joinCommunityMarkup,
   approveJoinRequest,
   getWebhookInfo,
-  broadcastMilestone,
-  broadcastFinish,
-  broadcastJoin,
-  broadcastDigest
+  answerCallbackQuery
 };

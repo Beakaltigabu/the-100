@@ -40,6 +40,12 @@ const config = {
 
   encryptionKey: process.env.ENCRYPTION_KEY || '',
 
+  vapid: {
+    publicKey: process.env.VAPID_PUBLIC_KEY || '',
+    privateKey: process.env.VAPID_PRIVATE_KEY || '',
+    subject: process.env.VAPID_SUBJECT || ''
+  },
+
   strava: {
     clientId: process.env.STRAVA_CLIENT_ID || '',
     clientSecret: process.env.STRAVA_CLIENT_SECRET || '',

@@ -32,6 +32,16 @@ export default function MemberProfileModal({ memberId, onClose }) {
         <p>{error}</p>
       ) : data ? (
         <div className="member-profile member-profile--modal">
+          {data.badges && data.badges.length ? (
+            <div className="member-profile__badges">
+              {data.badges.map((b) => (
+                <span className="mp-badge" key={b.code} title={b.description}>
+                  <span className="mp-badge__icon" aria-hidden="true">{b.icon}</span>
+                  <span className="mp-badge__name">{b.name}</span>
+                </span>
+              ))}
+            </div>
+          ) : null}
           <ErrorBoundary>
             <MemberProfileContent data={data} />
           </ErrorBoundary>

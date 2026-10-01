@@ -1,0 +1,116 @@
+.mr {
+  margin-top: var(--space-4);
+}
+
+.mr__kicker {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.mr__count {
+  color: var(--color-accent);
+}
+
+.mr__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mr__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md, 10px);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.mr__row:hover {
+  background: var(--color-surface-2, rgba(127, 127, 127, 0.12));
+}
+
+.mr__avatar {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.mr__img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-surface-2, rgba(127, 127, 127, 0.18));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+  color: var(--color-ink, inherit);
+  object-fit: cover;
+}
+
+.mr__live {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #4ade80;
+  border: 2px solid var(--color-paper, #fff);
+}
+
+.mr__meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mr__name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mr__sub {
+  font-size: 0.72rem;
+  color: var(--color-muted);
+}
+
+.mr__bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-surface-2, rgba(127, 127, 127, 0.2));
+  overflow: hidden;
+}
+
+.mr__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+.mr__toggle {
+  margin-top: var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font-weight: 800;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}

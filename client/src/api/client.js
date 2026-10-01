@@ -13,6 +13,9 @@ async function request(method, path, body) {
     headers: {},
     credentials: 'include'
   };
+  // Active impersonation session: act as the viewed member on every request.
+  const imp = sessionStorage.getItem('the100_impersonation');
+  if (imp) opts.headers['X-Impersonate'] = imp;
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);

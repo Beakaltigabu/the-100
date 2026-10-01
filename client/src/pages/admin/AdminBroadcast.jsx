@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useToast } from '../../components/Toast';
 import { ErrorState } from '../../components/States';
 import PageSkeleton from '../../components/PageSkeleton';
 import AdminShell from '../../components/admin/AdminShell';
-import { StatusBadge, ConfirmDialog, EmptyState } from '../../components/admin/ui';
+import { StatusBadge, ConfirmDialog, EmptyState, AdminPager, DateRange } from '../../components/admin/ui';
+import { useAdminList } from '../../lib/adminList';
 import './Admin.css';
 import './AdminBroadcast.css';
 
@@ -42,26 +43,28 @@ function cap(s) {
 export default function AdminBroadcast() {
   const { showToast } = useToast();
   const navigate = useNavigate();
-  const [list, setList] = useState([]);
   const [filter, setFilter] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [confirm, setConfirm] = useState(null); // { id, kind, title, message }
-  const [conflict, setConflict] = useState(null); // { id, title }
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [confirm, setConfirm] = useState(null);
+  const [conflict, setConflict] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError('');
-    const q = filter ? `?status=${filter}` : '';
-    api
-      .get(`/api/admin/broadcasts${q}`)
-      .then((d) => setList(d.broadcasts || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [filter]);
+  const buildQuery = useCallback(() => {
+    const q = {};
+    if (filter === 'archived') q.deleted = '1';
+    else if (filter) q.status = filter;
+    if (from) q.from = from;
+    if (to) q.to = to;
+    return q;
+  }, [filter, from, to]);
 
-  useEffect(load, [load]);
+  const { rows, total, page, limit, loading, error, reload, viewMore, goPage } = useAdminList({
+    path: '/api/admin/broadcasts',
+    dataKey: 'broadcasts',
+    buildQuery
+  });
 
   const runAction = async () => {
     if (!confirm) return;
@@ -83,11 +86,12 @@ export default function AdminBroadcast() {
       }
       if (kind === 'end') await api.post(`/api/admin/broadcasts/${id}/end`);
       if (kind === 'delete') await api.del(`/api/admin/broadcasts/${id}`);
-      showToast(kind === 'publish' ? 'Broadcast is live' : kind === 'end' ? 'Broadcast ended' : 'Broadcast deleted', 'success');
+      if (kind === 'restore') await api.post(`/api/admin/broadcasts/${id}/restore`);
+      showToast(kind === 'publish' ? 'Broadcast is live' : kind === 'end' ? 'Broadcast ended' : kind === 'delete' ? 'Broadcast archived' : 'Broadcast restored', 'success');
       setConfirm(null);
-      load();
+      reload();
     } catch (err) {
-      setError(err.message);
+      setActionError(err.message);
     } finally {
       setBusy(false);
     }
@@ -100,18 +104,18 @@ export default function AdminBroadcast() {
       await api.post(`/api/admin/broadcasts/${conflict.id}/publish`, { endPrevious: true });
       showToast('Broadcast is live', 'success');
       setConflict(null);
-      load();
+      reload();
     } catch (err) {
-      setError(err.message);
+      setActionError(err.message);
     } finally {
       setBusy(false);
     }
   };
 
-  if (loading) return <PageSkeleton variant="admin" />;
-  if (error && !list.length) return <ErrorState message={error} onRetry={load} />;
+  if (loading && rows.length === 0) return <PageSkeleton variant="admin" />;
+  if (error && rows.length === 0) return <ErrorState message={error} onRetry={reload} />;
 
-  const statusTabs = [{ key: '', label: 'All' }, ...STATUS.map((s) => ({ key: s, label: cap(s) }))];
+  const statusTabs = [{ key: '', label: 'All' }, ...STATUS.map((s) => ({ key: s, label: cap(s) })), { key: 'archived', label: 'Archived' }];
 
   return (
     <AdminShell
@@ -122,7 +126,7 @@ export default function AdminBroadcast() {
         </Link>
       }
     >
-      {error ? <p className="ob-error">{error}</p> : null}
+      {error || actionError ? <p className="ob-error">{error || actionError}</p> : null}
 
       <div className="admin__tabs" style={{ marginBottom: 'var(--space-4)' }}>
         {statusTabs.map((s) => (
@@ -136,9 +140,13 @@ export default function AdminBroadcast() {
         ))}
       </div>
 
-      {list.length === 0 ? (
+      <div className="admin__filters" style={{ marginBottom: 'var(--space-4)' }}>
+        <DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />
+      </div>
+
+      {rows.length === 0 ? (
         <div className="admin-card">
-          <EmptyState message="No broadcasts yet." action={<Link className="btn btn--primary" to="/admin/broadcast/new">Create one</Link>} />
+          <EmptyState message={filter === 'archived' ? 'No archived broadcasts.' : 'No broadcasts yet.'} action={<Link className="btn btn--primary" to="/admin/broadcast/new">Create one</Link>} />
         </div>
       ) : (
         <div className="admin-card" style={{ padding: 0 }}>
@@ -156,10 +164,10 @@ export default function AdminBroadcast() {
                 </tr>
               </thead>
               <tbody>
-                {list.map((b) => (
+                {rows.map((b) => (
                   <tr key={b.id}>
                     <td>
-                      <StatusBadge tone={STATUS_TONE[b.status]}>{cap(b.status)}</StatusBadge>
+                      <StatusBadge tone={b.deletedAt ? 'muted' : STATUS_TONE[b.status]}>{b.deletedAt ? 'archived' : cap(b.status)}</StatusBadge>
                     </td>
                     <td style={{ whiteSpace: 'normal', maxWidth: 260 }}>
                       <div style={{ fontWeight: 700 }}>{b.title}</div>
@@ -178,24 +186,32 @@ export default function AdminBroadcast() {
                     <td>{fmtTs(b.publishedAt)}</td>
                     <td>
                       <div className="admin__row-actions" style={{ justifyContent: 'flex-end' }}>
-                        {b.status === 'draft' || b.status === 'live' ? (
-                          <Link className="btn btn--secondary btn--sm" to={`/admin/broadcast/${b.id}/edit`}>
-                            Edit
-                          </Link>
-                        ) : null}
-                        {b.status === 'draft' || b.status === 'scheduled' ? (
-                          <button className="btn btn--primary btn--sm" onClick={() => setConfirm({ id: b.id, kind: 'publish', title: 'Publish broadcast', message: 'Send this broadcast to its audience now?' })}>
-                            Publish
+                        {b.deletedAt ? (
+                          <button className="btn btn--secondary btn--sm" onClick={() => setConfirm({ id: b.id, kind: 'restore', title: 'Restore broadcast', message: 'Bring this broadcast back into the list? It will be visible again to admins.' })}>
+                            Restore
                           </button>
-                        ) : null}
-                        {b.status === 'live' ? (
-                          <button className="btn btn--secondary btn--sm" onClick={() => setConfirm({ id: b.id, kind: 'end', title: 'End broadcast', message: 'This will remove the banner for all users.' })}>
-                            End
-                          </button>
-                        ) : null}
-                        <button className="btn btn--danger btn--sm" onClick={() => setConfirm({ id: b.id, kind: 'delete', title: 'Delete broadcast', message: 'This is permanent.', danger: true })}>
-                          Delete
-                        </button>
+                        ) : (
+                          <>
+                            {b.status === 'draft' || b.status === 'live' ? (
+                              <Link className="btn btn--secondary btn--sm" to={`/admin/broadcast/${b.id}/edit`}>
+                                Edit
+                              </Link>
+                            ) : null}
+                            {b.status === 'draft' || b.status === 'scheduled' ? (
+                              <button className="btn btn--primary btn--sm" onClick={() => setConfirm({ id: b.id, kind: 'publish', title: 'Publish broadcast', message: 'Send this broadcast to its audience now?' })}>
+                                Publish
+                              </button>
+                            ) : null}
+                            {b.status === 'live' ? (
+                              <button className="btn btn--secondary btn--sm" onClick={() => setConfirm({ id: b.id, kind: 'end', title: 'End broadcast', message: 'This will remove the banner for all users.' })}>
+                                End
+                              </button>
+                            ) : null}
+                            <button className="btn btn--danger btn--sm" onClick={() => setConfirm({ id: b.id, kind: 'delete', title: 'Archive broadcast', message: 'This hides the broadcast everywhere. You can restore it later from the Archived tab.', danger: true })}>
+                              Archive
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -206,12 +222,21 @@ export default function AdminBroadcast() {
         </div>
       )}
 
+      <AdminPager page={page} limit={limit} total={total} onPage={goPage} />
+      {page * limit < total ? (
+        <div className="admin__pager">
+          <button className="btn btn--secondary btn--sm" onClick={viewMore}>
+            View more
+          </button>
+        </div>
+      ) : null}
+
       <ConfirmDialog
         open={!!confirm}
         title={confirm?.title}
         message={confirm?.message}
         danger={confirm?.danger}
-        confirmLabel={confirm?.kind === 'delete' ? 'Delete' : 'Confirm'}
+        confirmLabel={confirm?.kind === 'delete' ? 'Archive' : confirm?.kind === 'restore' ? 'Restore' : 'Confirm'}
         busy={busy}
         onConfirm={runAction}
         onCancel={() => setConfirm(null)}

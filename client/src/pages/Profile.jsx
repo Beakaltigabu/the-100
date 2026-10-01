@@ -9,6 +9,7 @@ import Button from '../components/Button';
 import ProgressBar from '../components/ProgressBar';
 import Modal from '../components/Modal';
 import PasswordField from '../components/PasswordField';
+import NotificationChannelToggle from '../components/NotificationChannelToggle';
 import { ErrorState } from '../components/States';
 import PageSkeleton from '../components/PageSkeleton';
 import { milestonesForActivity } from '../lib/activity';
@@ -16,16 +17,8 @@ import { openSafeUrl } from '../lib/url';
 import { MOTIVATION_KEYS, MOTIVATION_MAX, motivationLabelKey, motivationPhraseKey } from '../lib/motivation';
 import './Profile.css';
 
-function statusOf(challenge, total) {
-  if (!challenge) return 'inactive';
-  if (challenge.status === 'completed') return 'completed';
-  const today = new Date().toISOString().slice(0, 10);
-  if (today < challenge.startDate) return 'not_started';
-  const day = Math.min(100, Math.max(1, Math.floor((new Date(today) - new Date(challenge.startDate + 'T00:00:00')) / 86400000) + 1));
-  if (day <= 2) return 'on_track'; // just started — never "falling behind"
-  const expected = Number(challenge.goalValue) * (day / 100) * 0.9;
-  return total >= expected ? 'on_track' : 'falling_behind';
-}
+// Derived status comes from the server (single source of truth) — see
+// /api/profile challenge.derivedStatus.
 
 function Avatar({ url, name }) {
   const initial = (name || '?').trim()[0]?.toUpperCase() || '?';
@@ -189,7 +182,7 @@ export default function Profile() {
   const unit = challenge?.goalUnit === 'km' ? t('unitKm') : t('unitSessions');
   const totalValue = challenge?.totalValue || 0;
   const goal = challenge ? Number(challenge.goalValue) : 0;
-  const status = statusOf(challenge, totalValue);
+  const status = challenge ? challenge.derivedStatus || 'inactive' : 'inactive';
   const statusKey = { on_track: 'onTrack', falling_behind: 'fallingBehind', inactive: 'inactive', completed: 'completed', not_started: 'notStarted' }[status] || 'inactive';
   const milestones = challenge ? milestonesForActivity(activityType).filter((th) => th <= goal) : [];
   const nextThreshold = milestones.find((th) => totalValue < th) ?? null;
@@ -380,6 +373,11 @@ export default function Profile() {
             )}
           </div>
         </div>
+      </section>
+
+      <section className="pf-section">
+        <p className="pf-label">{t('notifPreferences')}</p>
+        <NotificationChannelToggle onError={setError} />
       </section>
 
       <section className="pf-section">

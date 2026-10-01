@@ -1,0 +1,65 @@
+.sc {
+  background: var(--card-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.sc__label {
+  margin: 0 0 var(--space-3);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.sc__body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--fg);
+}
+
+.sc__avatar {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  display: grid;
+  place-items: center;
+  font-size: 0.9rem;
+  font-weight: 800;
+  object-fit: cover;
+}
+
+.sc__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sc__name {
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.sc__goal {
+  font-size: 0.76rem;
+  color: var(--color-muted);
+}
+
+.sc__cta {
+  margin-left: auto;
+  color: var(--color-accent);
+  font-weight: 800;
+}

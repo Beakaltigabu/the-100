@@ -3,7 +3,10 @@ import { Routes, Route, Link, Navigate } from 'react-router-dom';
 import Navigation from './components/Navigation';
 import AppFooter from './components/AppFooter';
 import InstallBanner from './components/InstallBanner';
+import PushBanner from './components/PushBanner';
 import BroadcastBanner from './components/BroadcastBanner';
+import SessionTracker from './components/SessionTracker';
+import ImpersonationBanner from './components/ImpersonationBanner';
 import PageSkeleton from './components/PageSkeleton';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ScrollRestore } from './hooks/useScrollRestoration';
@@ -21,6 +24,7 @@ const Onboarding = lazy(() => import('./pages/Onboarding'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Community = lazy(() => import('./pages/Community'));
 const Profile = lazy(() => import('./pages/Profile'));
+const Notifications = lazy(() => import('./pages/Notifications'));
 const Landing = lazy(() => import('./pages/Landing'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
@@ -69,9 +73,12 @@ export default function App() {
     <>
       <Navigation />
       <BroadcastBanner />
+      <ImpersonationBanner />
       <InstallBanner />
+      <PushBanner />
       <LanguageSync />
       <ScrollRestore />
+      <SessionTracker />
       <main className="app-main">
         <ErrorBoundary>
           <Suspense fallback={<PageSkeleton />}>
@@ -129,6 +136,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <Notifications />
               </ProtectedRoute>
             }
           />

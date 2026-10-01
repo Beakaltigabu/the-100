@@ -1,0 +1,22 @@
+.impb {
+  background: var(--color-danger);
+  color: #fff;
+  padding: 8px 0;
+  font-size: 0.85rem;
+}
+
+.impb__inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.impb .btn--primary {
+  background: #fff;
+  color: var(--color-danger);
+}

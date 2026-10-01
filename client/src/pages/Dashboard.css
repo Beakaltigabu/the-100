@@ -655,3 +655,150 @@
     transition: none;
   }
 }
+
+/* ── Phase F: psychology-backed dashboard ───────────────── */
+
+.dash-streak {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 14px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  margin-top: var(--space-4);
+}
+
+.dash-streak__flame {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.dash-streak__num {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.dash-streak__unit {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+}
+
+.dash-streak__note {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  text-align: right;
+}
+
+/* Today's move — the single focal action */
+.dash-move {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  background: linear-gradient(180deg, var(--color-accent-soft), transparent 70%);
+  margin-top: var(--space-4);
+}
+
+.dash-move__row {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.dash-move__input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  background: var(--input-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+}
+
+.dash-move__chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+.dash-move__meta {
+  margin-top: var(--space-2);
+  font-size: 0.72rem;
+  color: var(--color-muted);
+}
+
+/* Week sparkline */
+.dash-spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 56px;
+  margin-top: var(--space-3);
+}
+
+.dash-spark__bar {
+  flex: 1;
+  min-width: 8px;
+  border-radius: 4px 4px 0 0;
+  background: var(--color-accent);
+  opacity: 0.85;
+}
+
+.dash-spark__bar.is-zero {
+  background: var(--color-surface-alt);
+  opacity: 1;
+}
+
+/* Community pulse snippet */
+.dash-pulse {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px 16px;
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-4);
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.dash-pulse__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+}
+
+/* Collapsible Why */
+.dash-why-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.dash-why-toggle__chevron {
+  transition: transform 0.15s ease;
+}
+
+.dash-why-toggle.is-open .dash-why-toggle__chevron {
+  transform: rotate(90deg);
+}

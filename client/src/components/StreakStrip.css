@@ -1,0 +1,38 @@
+.ss {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--color-accent-soft), transparent 70%);
+  margin-bottom: var(--space-3);
+}
+
+.ss__flame {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.ss__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ss__line {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.ss__line strong {
+  color: var(--color-accent);
+}
+
+.ss__sub {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}

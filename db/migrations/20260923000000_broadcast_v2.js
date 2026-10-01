@@ -29,6 +29,12 @@ exports.up = async function up(knex) {
 };
 
 exports.down = async function down(knex) {
+  // Refuse to silently erase delivery records: rolling this back drops the
+  // broadcast_recipients table. Only drop when it is empty.
+  const row = await knex('broadcast_recipients').count({ c: '*' }).first();
+  if (row && Number(row.c) > 0) {
+    throw new Error('Refusing to roll back 20260923000000_broadcast_v2: broadcast_recipients table is not empty. Back it up or empty it manually first.');
+  }
   await knex.schema.dropTableIfExists('broadcast_recipients');
   await knex.schema.alterTable('broadcasts', (t) => {
     t.dropColumn('status');

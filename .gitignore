@@ -38,3 +38,10 @@ ScreenShoots/
 
 # Throwaway dev/debug scripts (may reference local env values)
 server/scripts/smoke-enroll.cjs
+
+# DB backups / production dumps (may contain real user data + secrets)
+db/backups/
+
+# Deploy artifacts (built zip + staging)
+deploy/stage/
+deploy/*.zip

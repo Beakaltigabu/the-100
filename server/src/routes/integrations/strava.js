@@ -139,6 +139,7 @@ router.post(
         scope: null,
         status: 'disconnected',
         disconnected_at: db.fn.now(),
+        last_synced_at: null,
         updated_at: db.fn.now()
       });
 

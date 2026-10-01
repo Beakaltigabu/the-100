@@ -1,16 +1,20 @@
 const db = require('../db');
 const { todayISO, diffDays, startOfWeek } = require('../lib/dates');
-const { createNotification } = require('./notifications');
+const { createNotification, telegramAllowed } = require('./notifications');
 const { unitForActivity, UNIT_LABEL } = require('../constants');
 const telegramMessenger = require('./telegramMessenger');
-const botMessages = require('./botMessages');
 const { getMeta, setMeta } = require('./meta');
 const { logEvent } = require('./logger');
 const { publishDueScheduled } = require('./broadcast');
-
-// Fast path for the once-per-day digest guard (persisted in the `meta` table so
-// a restart can't double-send the daily digest).
-let lastDigestDay = null;
+const { syncStrava } = require('./stravaSync');
+const { syncMilestones } = require('./milestones');
+const botSettings = require('./botSettings');
+const botGroupGuard = require('./botGroupGuard');
+const botMessagesV2 = require('./botMessagesV2');
+const { getActiveChallenge } = require('./challengeWindow');
+const { dbHealthy } = require('./dbHealth');
+const { alertAdmins, sendAdminMessage } = require('./adminAlerts');
+const { backlog } = require('./queue');
 
 async function totalsByEnrollment(enrollmentIds) {
   if (!enrollmentIds.length) return {};
@@ -75,6 +79,13 @@ async function checkFinishers() {
 
   const users = await usersById(finishers.map((e) => e.user_id));
   for (const e of finishers) {
+    // Award milestone rows first (idempotent — only fills unreached thresholds)
+    // so a completed enrollment never leaves milestones un-marked.
+    try {
+      await syncMilestones(e.id, totals[e.id] || 0);
+    } catch (err) {
+      console.error('checkFinishers milestone sync error:', err.message);
+    }
     // Atomic conditional flip: progressEvents (on every logged activity) can
     // race this job — only the caller that changes the row announces the finish.
     const flipped = await db('enrollments')
@@ -90,8 +101,18 @@ async function checkFinishers() {
       body: `You reached ${e.goal_value} ${unitLabel}. You finished what you started.`
     });
     const user = users[e.user_id];
-    telegramMessenger.sendToUser(e.user_id, botMessages.finish((user && user.language) || 'en', e.goal_value, unitLabel));
-    telegramMessenger.broadcastFinish(user ? user.name : 'Member', e.goal_value, unitLabel);
+    if (await telegramAllowed(e.user_id, 'finish')) {
+      telegramMessenger.sendToUser(e.user_id, botMessagesV2.completion({ goal: Number(e.goal_value), unit: unitLabel }), {
+        inline_keyboard: [
+          [{ text: 'WHAT\u2019S NEXT?', callback_data: 'whats_next' }]
+        ]
+      });
+    }
+    if (await botGroupGuard.isGroupLive()) {
+      await botGroupGuard.sendToCommunity(
+        botMessagesV2.groupMemberFinish({ name: user ? user.name : 'Member', goal: Number(e.goal_value), unit: unitLabel })
+      );
+    }
   }
 }
 
@@ -108,23 +129,26 @@ async function checkInactivity() {
   if (!candidates.length) return;
 
   const already = await recentlyNotifiedUserIds('inactivity', 7, candidates.map((e) => e.user_id));
-  const users = await usersById(candidates.map((e) => e.user_id));
   for (const e of candidates) {
     if (already.has(e.user_id)) continue;
-    // `null` when the member has never logged anything — the message renders a
-    // friendly "haven't logged yet" phrase instead of a fake number.
-    const daysSince = lastDates[e.id] ? diffDays(lastDates[e.id], todayISO()) : null;
+    const settings = await botSettings.getSettings(e.user_id);
+    if (settings.remindersMode === 'never') continue;
     await createNotification({
       userId: e.user_id,
       type: 'inactivity',
       title: "You haven't checked in recently.",
       body: 'Your 100 is still waiting. Keep moving.'
     });
-    const lang = (users[e.user_id] && users[e.user_id].language) || 'en';
-    telegramMessenger.sendToUser(e.user_id, botMessages.inactivity(lang, daysSince));
+    if (await telegramAllowed(e.user_id, 'inactivity')) {
+      telegramMessenger.sendToUser(e.user_id, botMessagesV2.reengage(), {
+        inline_keyboard: [[{ text: '📝 LOG ACTIVITY', callback_data: 'log' }]]
+      });
+    }
   }
 }
 
+// Weekly PERSONAL recap (replaces the old generic weekly check-in). English,
+// gated by the user's bot settings. Runs Mondays.
 async function checkWeekly() {
   const today = todayISO();
   const weekStart = startOfWeek(today);
@@ -133,49 +157,135 @@ async function checkWeekly() {
   if (!enrollments.length) return;
 
   const totals = await totalsByEnrollment(enrollments.map((e) => e.id));
+  const last = await lastDatesByEnrollment(enrollments.map((e) => e.id));
   const already = await recentlyNotifiedUserIds('weekly_checkin', 6, enrollments.map((e) => e.user_id));
-  const users = await usersById(enrollments.map((e) => e.user_id));
+  const challenge = await getActiveChallenge();
+  const week = challenge ? Math.floor(diffDays(challenge.start_date, today) / 7) + 1 : 0;
+
   for (const e of enrollments) {
     if (already.has(e.user_id)) continue;
+    const settings = await botSettings.getSettings(e.user_id);
+    if (!settings.weeklyOn) continue;
+
+    const unitLabel = UNIT_LABEL[unitForActivity(e.activity_type)] || 'KM';
+    const goal = Number(e.goal_value);
+    const total = totals[e.id] || 0;
+    const pct = goal > 0 ? Math.round((total / goal) * 1000) / 10 : 0;
+    const next = await db('milestones').where({ enrollment_id: e.id }).whereNull('reached_at').orderBy('threshold', 'asc').first();
+
+    // This week's activity: sum from weekStart and count distinct days.
+    const weekRows = await db('challenge_activities')
+      .where({ enrollment_id: e.id })
+      .where('date', '>=', weekStart)
+      .groupBy('date')
+      .select('date')
+      .sum({ total: 'quantity' });
+    const weekKm = Math.round((Number(weekRows.reduce((a, r) => a + Number(r.total || 0), 0)) || 0) * 100) / 100;
+    const days = new Set(weekRows.map((r) => r.date)).size;
+
     await createNotification({
       userId: e.user_id,
       type: 'weekly_checkin',
-      title: 'How did your week go?',
-      body: 'Log your activities and keep your streak alive.'
+      title: 'Your week in THE 100',
+      body: 'A quick look back at your week.'
     });
-    const total = totals[e.id] || 0;
-    const unitLabel = UNIT_LABEL[unitForActivity(e.activity_type)] || 'KM';
-    const lang = (users[e.user_id] && users[e.user_id].language) || 'en';
-    telegramMessenger.sendToUser(e.user_id, botMessages.weeklyCheckin(lang, total, e.goal_value, unitLabel));
+    telegramMessenger.sendToUser(
+      e.user_id,
+      botMessagesV2.weeklyRecap({
+        week,
+        weekKm,
+        unit: unitLabel,
+        activities: days,
+        total: Math.round(total * 100) / 100,
+        goal,
+        pct,
+        next: next ? Number(next.threshold) : null,
+        remainingToNext: next ? Math.round((Math.max(0, Number(next.threshold) - total)) * 100) / 100 : 0
+      })
+    );
   }
 }
 
-async function sendDailyDigest() {
+// Group catalyst: a weekly conversation starter, rate-limited by the botGroupGuard.
+async function checkGroupCatalyst() {
+  const week = botGroupGuard.currentWeek();
+  const last = await getMeta('bot_group_starter_week');
+  if (last === week) return;
+  const ok = await botGroupGuard.canPostToGroup();
+  if (!ok) return;
+  const sent = await botGroupGuard.sendToCommunity(botMessagesV2.groupConversationStarter(Number(week.split('-W')[1]) || 0));
+  if (sent.sent) await setMeta('bot_group_starter_week', week);
+}
+
+// Challenge-day moments (private). Only meaningful days: 1,10,25,50,75,90,99,100.
+// Never sent to members who already completed; gated by milestone settings.
+const CHALLENGE_DAYS = [1, 10, 25, 50, 75, 90, 99, 100];
+
+async function checkChallengeDays() {
+  const challenge = await getActiveChallenge();
+  if (!challenge) return;
   const today = todayISO();
-  if (!lastDigestDay) {
-    lastDigestDay = await getMeta('digest_day'); // survives restarts
+  const day = diffDays(challenge.start_date, today) + 1;
+  if (day < 1 || day > 100) return;
+  if (!CHALLENGE_DAYS.includes(day)) return;
+  const metaKey = `bot_day_${challenge.id}_${day}`;
+  if ((await getMeta(metaKey)) === '1') return; // once per day, survives restarts
+
+  const enrollments = await activeEnrollments();
+  if (!enrollments.length) return;
+  const text = botMessagesV2.challengeDay(day);
+  for (const e of enrollments) {
+    if (e.status === 'completed') continue;
+    const settings = await botSettings.getSettings(e.user_id);
+    if (!settings.milestonesOn) continue;
+    telegramMessenger.sendToUser(e.user_id, text);
   }
-  if (lastDigestDay === today) return; // once per day
+  await setMeta(metaKey, '1');
+}
 
-  const checkedInToday = await db('challenge_activities')
-    .where({ date: today })
-    .countDistinct({ c: 'enrollment_id' })
-    .first();
-  const weekStart = startOfWeek(today);
-  const milestonesThisWeek = await db('milestones')
-    .where('reached_at', '>=', `${weekStart} 00:00:00`)
-    .count({ c: '*' })
-    .first();
-  const finishers = await db('enrollments').where({ status: 'completed' }).count({ c: '*' }).first();
+// Community-wide challenge moments (group post) on the curated days — only
+// while the challenge is active, once per day, guard-capped.
+const GROUP_DAYS = [1, 10, 50, 75, 90, 99, 100];
 
-  await telegramMessenger.broadcastDigest(
-    Number(checkedInToday.c),
-    Number(milestonesThisWeek.c),
-    Number(finishers.c)
-  );
+async function checkGroupChallengeMoments() {
+  const challenge = await getActiveChallenge();
+  if (!challenge) return;
+  const today = todayISO();
+  const day = diffDays(challenge.start_date, today) + 1;
+  if (day < 1 || day > 100) return;
+  if (!GROUP_DAYS.includes(day)) return;
+  const metaKey = `bot_group_day_${challenge.id}_${day}`;
+  if ((await getMeta(metaKey)) === '1') return;
+  const text = botMessagesV2.groupChallengeMoment(day);
+  if (!text) return;
+  const sent = await botGroupGuard.sendToCommunity(text);
+  if (sent.sent) await setMeta(metaKey, '1');
+}
 
-  lastDigestDay = today;
-  await setMeta('digest_day', today);
+// Collective-distance thresholds: one post each time the community total
+// crosses a meaningful milestone. Guard-capped (a threshold won't always win
+// the weekly budget).
+const COLLECTIVE_THRESHOLDS = [100, 500, 1000, 2500, 5000, 10000];
+
+async function checkCollectiveDistance() {
+  const challenge = await getActiveChallenge();
+  if (!challenge) return;
+  const enrollments = await activeEnrollments();
+  if (!enrollments.length) return;
+  const ids = enrollments.map((e) => e.id);
+  const r = await db('challenge_activities').whereIn('enrollment_id', ids).sum({ s: 'quantity' }).first();
+  const total = Number(r.s) || 0;
+  let next = null;
+  for (const t of COLLECTIVE_THRESHOLDS) {
+    if (total >= t && (Number(await getMeta(`bot_collective_${t}`)) || 0) === 0) {
+      next = t;
+      break;
+    }
+  }
+  if (!next) return;
+  const people = await db('challenge_activities').whereIn('enrollment_id', ids).countDistinct({ c: 'enrollment_id' }).first();
+  const sent = await botGroupGuard.sendToCommunity(botMessagesV2.groupCollectiveDistance({ km: next, people: Number(people.c) || 0 }));
+  if (sent.sent) await setMeta(`bot_collective_${next}`, '1');
 }
 
 // Expire invite tokens that were generated but never completed via /start.
@@ -194,14 +304,108 @@ async function pruneStaleInvites() {
   }
 }
 
-const JOBS = [checkFinishers, checkInactivity, checkWeekly, sendDailyDigest, pruneStaleInvites, publishDueScheduled, pruneLogs];
+const JOBS = [checkFinishers, checkInactivity, checkWeekly, checkGroupCatalyst, checkChallengeDays, checkGroupChallengeMoments, checkCollectiveDistance, sendAdminDigest, pruneStaleInvites, publishDueScheduled, pruneLogs];
+
+// Daily admin digest via the bot: a short morning summary of the system.
+// Runs once per day (meta-gated); skips while the DB is saturated.
+async function sendAdminDigest() {
+  const day = todayISO();
+  const last = await getMeta('admin_digest_day');
+  if (last === day) return { ran: false, reason: 'already-sent' };
+  if (!dbHealthy()) return { ran: false, reason: 'db-saturated' };
+  await setMeta('admin_digest_day', day);
+
+  const ch = await getActiveChallenge();
+  const lines = ['📊 THE 100 · DAILY DIGEST', ''];
+  if (ch) {
+    const dayNum = Math.min(100, Math.max(1, diffDays(ch.start_date, day) + 1));
+    lines.push(`DAY ${dayNum} / 100`);
+  }
+
+  if (ch) {
+    const members = await db('enrollments')
+      .where({ challenge_id: ch.id })
+      .whereIn('status', ['committed', 'active'])
+      .countDistinct({ c: 'user_id' })
+      .first();
+    const weekStart = startOfWeek(day);
+    const activeWeek = await db('challenge_activities')
+      .where('date', '>=', weekStart)
+      .countDistinct({ c: 'enrollment_id' })
+      .first();
+    const dist = await db('challenge_activities').sum({ s: 'quantity' }).first();
+    lines.push('', `MEMBERS  ${Number(members.c) || 0} total · ${Number(activeWeek.c) || 0} active this week`);
+    lines.push(`DISTANCE ${Math.round(Number(dist.s) || 0)} KM moved`);
+  }
+
+  const stravaConnected = await db('strava_connections').where({ status: 'connected' }).count({ c: '*' }).first();
+  const stravaDisconnected = await db('strava_connections').where({ status: 'disconnected' }).count({ c: '*' }).first();
+  const err24 = await db('error_logs').where('created_at', '>=', new Date(Date.now() - 86400000)).count({ c: '*' }).first();
+  lines.push(
+    '',
+    `STRAVA  ${Number(stravaConnected.c) || 0} connected · ${Number(stravaDisconnected.c) || 0} disconnected`,
+    `HEALTH  DB ${dbHealthy() ? 'ok' : 'backing off'} · errors(24h) ${Number(err24.c) || 0} · queue ${backlog()}`
+  );
+
+  await sendAdminMessage(lines.join('\n'));
+  return { ran: true };
+}
+
+// Safety-net Strava sync: the webhook is the primary path for new activities,
+// but a low-frequency poll catches anything the webhook missed. Runs every 4h.
+let stravaSyncRunning = false;
+
+async function checkStravaSync() {
+  if (stravaSyncRunning) return;
+  stravaSyncRunning = true;
+  try {
+    const banned = await db('users').whereNotNull('banned_at').pluck('id');
+    const q = db('strava_connections')
+      .join('enrollments', 'enrollments.user_id', 'strava_connections.user_id')
+      .join('challenges', 'challenges.id', 'enrollments.challenge_id')
+      .where({ 'strava_connections.status': 'connected', 'challenges.is_active': true })
+      .distinct('strava_connections.user_id as user_id');
+    if (banned.length) q.whereNotIn('strava_connections.user_id', banned);
+    const rows = await q;
+
+    let imported = 0;
+    let rateLimited = false;
+    for (const r of rows) {
+      // Per-user guard: one bad connection (e.g. unreadable/expired token) must
+      // not abort the whole run — log it and continue to the next member.
+      try {
+        const res = await syncStrava(r.user_id);
+        imported += res.imported || 0;
+        // Back off the rest of the run when Strava is throttling us.
+        if (res.rateLimited) {
+          rateLimited = true;
+          break;
+        }
+      } catch (err) {
+        logEvent({
+          source: 'strava',
+          type: 'sync_error',
+          message: `Strava sync failed for user ${r.user_id}: ${err.message}`,
+          meta: { userId: String(r.user_id) }
+        });
+        console.error(`[scheduler] Strava sync error for user ${r.user_id}:`, err.message);
+        alertAdmins(`Strava sync failed for user ${r.user_id}: ${err.message}`, { category: 'strava' }).catch(() => {});
+      }
+    }
+    if (imported > 0 || rateLimited) {
+      console.log(`[scheduler] Strava safety-net sync: imported ${imported} activity(s), rateLimited=${rateLimited}`);
+    }
+  } finally {
+    stravaSyncRunning = false;
+  }
+}
 
 // Overlap guard: a slow cycle (large member base) must never interleave with
 // the next interval tick — that would duplicate broadcasts/notifications.
 let jobCycleRunning = false;
 
 async function runScheduledJobs() {
-  if (jobCycleRunning) return;
+  if (jobCycleRunning) return { ran: false };
   jobCycleRunning = true;
   const startedAt = Date.now();
   try {
@@ -217,6 +421,7 @@ async function runScheduledJobs() {
           message: `${job.name} failed: ${err.message}`,
           meta: { job: job.name }
         });
+        alertAdmins(`Scheduler job ${job.name} failed: ${err.message}`, { category: 'scheduler' }).catch(() => {});
       }
     }
     logEvent({
@@ -225,6 +430,7 @@ async function runScheduledJobs() {
       message: `scheduled jobs completed in ${Date.now() - startedAt}ms`,
       meta: { durationMs: Date.now() - startedAt }
     });
+    return { ran: true, durationMs: Date.now() - startedAt };
   } finally {
     jobCycleRunning = false;
   }
@@ -232,10 +438,10 @@ async function runScheduledJobs() {
 
 // Delete old log rows and enforce a hard cap so request/error/event tables
 // can't grow without bound. Runs once per day (tracked in the meta table).
-async function pruneLogs() {
+async function pruneLogs({ force = false } = {}) {
   const day = todayISO();
   const last = await getMeta('last_log_prune');
-  if (last === day) return;
+  if (!force && last === day) return { ran: false, removed: 0 };
   await setMeta('last_log_prune', day);
 
   const reqRetention = Number(process.env.LOG_RETENTION_DAYS || 14);
@@ -263,17 +469,28 @@ async function pruneLogs() {
   if (removed > 0) {
     console.log(`[logs] pruned ${removed} log row(s) (requests ${delReq}, errors ${delErr}, events ${delEvt}, cap ${delCap})`);
   }
+  return { ran: true, removed };
 }
 
 function startScheduler() {
   const SIX_HOURS = 6 * 60 * 60 * 1000;
+  const FOUR_HOURS = 4 * 60 * 60 * 1000;
   const ONE_MINUTE = 60 * 1000;
   setTimeout(runScheduledJobs, 10 * 1000);
   setInterval(runScheduledJobs, SIX_HOURS);
-  // Scheduled broadcasts must go live promptly — poll every minute.
+  // Strava safety-net sync every 4 hours (webhook remains the primary path).
+  setTimeout(() => {
+    checkStravaSync().catch((err) => console.error('checkStravaSync failed:', err.message));
+  }, 15 * 1000);
   setInterval(() => {
+    checkStravaSync().catch((err) => console.error('checkStravaSync failed:', err.message));
+  }, FOUR_HOURS);
+  // Scheduled broadcasts must go live promptly — poll every minute (skip while
+  // MySQL is saturated to avoid piling more load onto a full server).
+  setInterval(() => {
+    if (!dbHealthy()) return;
     publishDueScheduled().catch((err) => console.error('publishDueScheduled failed:', err.message));
   }, ONE_MINUTE);
 }
 
-module.exports = { runScheduledJobs, startScheduler };
+module.exports = { runScheduledJobs, checkStravaSync, pruneLogs, checkInactivity, checkWeekly, checkGroupCatalyst, checkChallengeDays, checkGroupChallengeMoments, checkCollectiveDistance, sendAdminDigest, startScheduler };

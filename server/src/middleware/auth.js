@@ -20,6 +20,11 @@ function signSessionToken(user) {
   return signToken({ sub: user.id, tv: user.token_version ?? 0 });
 }
 
+// Short-lived impersonation token: an admin can view the app "as" a member.
+function signImpersonationToken(adminId, memberId) {
+  return signToken({ sub: memberId, imp: adminId, purpose: 'impersonation' }, { expiresIn: '30m' });
+}
+
 function verifyToken(token) {
   return jwt.verify(token, config.jwt.secret, {
     algorithms: ['HS256'],
@@ -49,6 +54,25 @@ function clearAuthCookie(res) {
 
 async function requireAuth(req, res, next) {
   try {
+    // Impersonation takes precedence over the session cookie: an admin viewing
+    // "as" a member sends an X-Impersonate token and acts as that member.
+    const impToken = req.headers && req.headers['x-impersonate'];
+    if (impToken) {
+      const p = verifyToken(impToken);
+      if (p.purpose === 'impersonation' && p.sub) {
+        const member = await db('users').where({ id: p.sub }).first();
+        if (member && !member.banned_at) {
+          const admin = await db('admins').where({ user_id: member.id }).first();
+          req.user = member;
+          req.isAdmin = !!admin;
+          req.isImpersonating = true;
+          req.impersonatorId = p.imp;
+          return next();
+        }
+      }
+      return next(new AppError('Invalid or expired impersonation session', 401));
+    }
+
     const token = req.cookies && req.cookies[config.cookie.name];
     if (!token) {
       return next(new AppError('Authentication required', 401));
@@ -87,4 +111,4 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-module.exports = { signToken, signSessionToken, verifyToken, setAuthCookie, clearAuthCookie, requireAuth, requireAdmin };
+module.exports = { signToken, signSessionToken, signImpersonationToken, verifyToken, setAuthCookie, clearAuthCookie, requireAuth, requireAdmin };

@@ -10,6 +10,7 @@ const { todayISO, diffDays } = require('../lib/dates');
 const config = require('../config');
 const { sanitizeName } = require('../lib/sanitize');
 const { getActiveChallenge } = require('../services/challengeWindow');
+const { enrollmentStatus } = require('../services/progress');
 
 const router = express.Router();
 
@@ -54,6 +55,14 @@ router.get(
         )
       : 0;
 
+    const lastDate = enrollment
+      ? (
+          await db('challenge_activities').where({ enrollment_id: enrollment.id }).max({ d: 'date' }).first()
+        ).d
+      : null;
+
+    const derivedStatus = enrollment ? enrollmentStatus(enrollment, total, lastDate) : 'inactive';
+
     const telegram = await db('telegram_connections').where({ user_id: user.id }).first();
     const strava = await db('strava_connections').where({ user_id: user.id }).first();
 
@@ -81,6 +90,7 @@ router.get(
             goalUnit: unitForActivity(enrollment.activity_type),
             activityType: enrollment.activity_type,
             status: enrollment.status,
+            derivedStatus,
             startDate: enrollment.start_date,
             endDate: enrollment.end_date,
             totalValue: total,

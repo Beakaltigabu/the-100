@@ -1,0 +1,209 @@
+/* Member detail — modern minimal expressive layout (scoped to this page) */
+
+.m360 {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ── Hero ───────────────────────────────────────────── */
+.m360__hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.m360__avatar {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.m360__hero-text {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.m360__kicker {
+  margin: 0 0 2px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.m360__hero-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.m360__hero-meta {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.m360__hero-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.m360__hero-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* ── Stat strip ─────────────────────────────────────── */
+.m360__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-3);
+}
+
+/* ── Two-column layout ──────────────────────────────── */
+.m360__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.m360__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.m360__aside {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── Progress bar ───────────────────────────────────── */
+.m360__bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-surface-alt);
+  overflow: hidden;
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.m360__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent);
+  transition: width 0.4s ease;
+}
+
+/* ── Milestones ─────────────────────────────────────── */
+.m360__milestones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+.m360__ms {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-muted);
+  padding: 4px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--card-bg-alt);
+}
+
+.m360__ms.is-reached {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.m360__ms.is-next {
+  color: var(--color-text, var(--fg));
+  border-color: var(--color-accent);
+}
+
+.m360__ms-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── Manage panel ───────────────────────────────────── */
+.m360__manage-section {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.m360__manage-section:first-child {
+  padding-top: 0;
+}
+
+.m360__manage-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.m360__manage-label {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.m360__manage-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.m360__manage-actions .btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.m360__danger .btn--danger {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+/* ── Responsive ─────────────────────────────────────── */
+@media (max-width: 980px) {
+  .m360__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .m360__aside {
+    position: static;
+  }
+}

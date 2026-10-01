@@ -390,9 +390,12 @@ export default function AdminBroadcastComposer() {
               <h2 className="admin-card__title">Live preview</h2>
             </div>
             <div className="bcp__banner">
+              <span className="bb__bar" />
               <span className="bb__label">{TYPES.find((t) => t.key === form.type)?.label}</span>
-              <p className="bb__title">{form.title || 'Your title'}</p>
-              {form.body ? <p className="bb__body">{form.body}</p> : null}
+              <span className="bb__text">
+                <strong className="bb__title">{form.title || 'Your title'}</strong>
+                {form.body ? <span className="bb__body"> · {form.body}</span> : null}
+              </span>
             </div>
           </div>
         </aside>

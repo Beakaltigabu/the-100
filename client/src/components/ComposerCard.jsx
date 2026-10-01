@@ -4,9 +4,11 @@ import { useLanguage } from '../context/LanguageContext';
 import { ACTIVITY_KEYS, activityLabelKey } from '../lib/activity';
 
 // Compact action card: "HOW'S YOUR 100 GOING?" → expand into a check-in composer.
-export default function ComposerCard({ onSubmit, busy }) {
+export default function ComposerCard({ onSubmit, busy, open, onOpenChange }) {
   const { t } = useLanguage();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = open !== undefined ? open : internalOpen;
+  const setOpen = onOpenChange ? onOpenChange : setInternalOpen;
   const [body, setBody] = useState('');
   const [distance, setDistance] = useState('');
   const [activity, setActivity] = useState('');
@@ -31,15 +33,16 @@ export default function ComposerCard({ onSubmit, busy }) {
 
   return (
     <div className="composer-card">
-      {!open ? (
-        <button type="button" className="composer-card__trigger" onClick={() => setOpen(true)}>
-          <span className="composer-card__title">{t('howsYour100')}</span>
-          <span className="composer-card__hint">{t('shareACheckIn')}</span>
-        </button>
-      ) : (
+      {!isOpen ? null : (
         <form className="composer-card__form" onSubmit={submit}>
+          <div className="composer-card__presets">
+            {['1', '2', '5'].map((p) => (
+              <button key={p} type="button" className="composer-card__chip" onClick={() => setDistance(p)}>
+                +{p} {t('unitKm')}
+              </button>
+            ))}
+          </div>
           <label className="field">
-            <span className="field__label">{t('shareACheckIn')}</span>
             <textarea
               className="field__input"
               rows={3}

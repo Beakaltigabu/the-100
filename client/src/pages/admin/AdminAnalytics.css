@@ -59,3 +59,41 @@
     grid-template-columns: 1fr;
   }
 }
+
+.ana__section {
+  margin-bottom: var(--space-5);
+}
+
+.ana__section-head {
+  margin-bottom: var(--space-3);
+}
+
+.ana__section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+
+.ana__section-sub {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.ana__sys {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.ana__hint {
+  margin: var(--space-3) 0 0;
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}
+
+@media (max-width: 900px) {
+  .ana__sys {
+    grid-template-columns: 1fr;
+  }
+}

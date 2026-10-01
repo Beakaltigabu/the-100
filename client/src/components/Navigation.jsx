@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import useStandalone from '../hooks/useStandalone';
 import Button from './Button';
+import NotificationBell from './NotificationBell';
 import { HomeIcon, UsersIcon, UserIcon, ShieldIcon } from './icons';
 
 function LanguageToggle() {
@@ -71,6 +72,7 @@ export default function Navigation() {
               <ShieldIcon size={16} />
             </NavLink>
           ) : null}
+          <NotificationBell />
           {showLogin ? (
             <NavLink to="/login">
               <Button variant="primary" size="sm">

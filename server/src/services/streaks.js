@@ -55,4 +55,23 @@ async function computeStreaks(limit = 8) {
   return top.map((s) => ({ name: nameById[s.user_id] || 'Member', days: s.days }));
 }
 
-module.exports = { computeStreaks };
+// A single member's current consecutive-day streak (consecutive days with an
+// activity, up to today). Used by the dashboard's "don't break the chain" strip.
+async function currentStreakForEnrollment(enrollmentId) {
+  const today = todayISO();
+  const dates = await db('challenge_activities')
+    .where({ enrollment_id: enrollmentId })
+    .where('date', '<=', today)
+    .distinct('date')
+    .pluck('date');
+  const set = new Set(dates);
+  let cursor = today;
+  let count = 0;
+  while (set.has(cursor)) {
+    count += 1;
+    cursor = addDaysISO(cursor, -1);
+  }
+  return count;
+}
+
+module.exports = { computeStreaks, currentStreakForEnrollment };

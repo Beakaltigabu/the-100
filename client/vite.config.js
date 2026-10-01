@@ -58,9 +58,13 @@ export default defineConfig(({ mode }) => {
       requireApiUrl(),
       cspPlugin(apiOrigin),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.js',
         registerType: 'autoUpdate',
         devOptions: {
-          enabled: true
+          enabled: true,
+          type: 'module'
         },
         includeAssets: ['icon.svg', 'icons/*.png'],
         manifest: {
@@ -79,28 +83,12 @@ export default defineConfig(({ mode }) => {
             { src: '/icons/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
           ]
         },
-        workbox: {
-          navigateFallback: '/index.html',
+        injectManifest: {
+          globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
           // Keep the first-visit precache lean: admin chunks load on demand,
           // the 512 icon is install-time only, and cap any single file.
           globIgnores: ['**/Admin*.js', 'icons/pwa-512.png'],
-          maximumFileSizeToCacheInBytes: 300 * 1024,
-          runtimeCaching: [
-            {
-              urlPattern: ({ url }) => url.origin === 'https://fonts.googleapis.com',
-              handler: 'StaleWhileRevalidate',
-              options: { cacheName: 'google-fonts-css' }
-            },
-            {
-              urlPattern: ({ url }) => url.origin === 'https://fonts.gstatic.com',
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'google-fonts-webfonts',
-                cacheableResponse: { statuses: [0, 200] },
-                expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 365 }
-              }
-            }
-          ]
+          maximumFileSizeToCacheInBytes: 300 * 1024
         }
       })
     ],

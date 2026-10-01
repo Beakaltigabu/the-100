@@ -1,5 +1,5 @@
 const db = require('../db');
-const { milestonesForActivity, unitForActivity, TOTAL_DAYS, ON_TRACK_TOLERANCE } = require('../constants');
+const { milestonesForActivity, unitForActivity, TOTAL_DAYS, ON_TRACK_TOLERANCE, RECENT_ACTIVE_DAYS } = require('../constants');
 const { diffDays, startOfWeek, todayISO } = require('../lib/dates');
 const { getActiveChallenge } = require('./challengeWindow');
 
@@ -59,6 +59,9 @@ function enrollmentStatus(enrollment, total, lastActivityDate) {
 
   if (!lastActivityDate) return 'inactive';
   const daysSince = diffDays(lastActivityDate, today);
+  // Recently active members are showing up — treat movement as on track even
+  // when they haven't caught up to the linear pace yet (don't shame starters).
+  if (daysSince <= RECENT_ACTIVE_DAYS) return 'on_track';
   return daysSince > 7 ? 'inactive' : 'falling_behind';
 }
 

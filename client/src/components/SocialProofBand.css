@@ -1,0 +1,45 @@
+.spb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-3);
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}
+
+.spb__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+  animation: spb-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes spb-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.spb__items {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.spb__items::-webkit-scrollbar {
+  display: none;
+}
+
+.spb__item strong {
+  color: var(--fg);
+}
+
+.spb__time {
+  opacity: 0.7;
+}

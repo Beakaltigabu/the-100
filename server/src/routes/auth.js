@@ -276,6 +276,7 @@ const meHandler = [
       onboardingComplete: !!user.onboarding_complete,
       emailVerified: !!user.email_verified,
       hasGoogle: !!user.google_id,
+      pwaInstalled: !!user.pwa_installed,
       hasEnrollment: !!enrollment,
       language: user.language || 'en',
       isAdmin: req.isAdmin

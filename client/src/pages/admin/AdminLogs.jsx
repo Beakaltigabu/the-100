@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
+import { useToast } from '../../components/Toast';
 import { ErrorState } from '../../components/States';
 import PageSkeleton from '../../components/PageSkeleton';
 import Stat from '../../components/Stat';
 import AdminShell from '../../components/admin/AdminShell';
+import { ConfirmDialog, AdminPager, DateRange } from '../../components/admin/ui';
 import './Admin.css';
 
 const TABS = ['requests', 'errors', 'events', 'system', 'usage'];
+const LIST_ENDPOINTS = { requests: 'requests', errors: 'errors', events: 'events' };
 
 function fmtTs(ts) {
   if (!ts) return '';
@@ -22,48 +25,108 @@ function fmtUptime(sec) {
 
 export default function AdminLogs() {
   const { t } = useLanguage();
+  const { showToast } = useToast();
   const [tab, setTab] = useState('requests');
   const [live, setLive] = useState(false);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [filters, setFilters] = useState({});
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [rows, setRows] = useState(null);
   const [system, setSystem] = useState(null);
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [flushConfirm, setFlushConfirm] = useState(false);
+
+  const loadSystem = useCallback(() => {
+    api.get('/api/admin/system').then(setSystem).catch(() => setSystem(null));
+  }, []);
 
   const loadList = useCallback(() => {
-    const endpoints = { requests: 'requests', errors: 'errors', events: 'events' };
-    if (!endpoints[tab]) return;
+    const endpoint = LIST_ENDPOINTS[tab];
+    if (!endpoint) return;
     setLoading(true);
     setError('');
-    const qs = new URLSearchParams({ page: String(page), limit: '50' });
+    const qs = new URLSearchParams({ page: String(page), limit: String(limit) });
     Object.entries(filters).forEach(([k, v]) => v && qs.set(k, v));
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
     api
-      .get(`/api/admin/logs/${endpoints[tab]}?${qs.toString()}`)
+      .get(`/api/admin/logs/${endpoint}?${qs.toString()}`)
       .then((d) => setRows(d))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [tab, page, filters]);
+  }, [tab, page, limit, filters, from, to]);
 
   useEffect(() => {
-    if (['requests', 'errors', 'events'].includes(tab)) loadList();
-    else if (tab === 'system') api.get('/api/admin/system').then(setSystem).catch(() => setSystem(null));
+    if (LIST_ENDPOINTS[tab]) loadList();
+    else if (tab === 'system') loadSystem();
     else if (tab === 'usage') api.get('/api/admin/logs/stats').then(setUsage).catch(() => setUsage(null));
-  }, [tab, loadList]);
+  }, [tab, loadList, loadSystem]);
 
   useEffect(() => {
-    if (!live) return;
+    if (!live || !LIST_ENDPOINTS[tab]) return;
     const id = setInterval(loadList, 15000);
     return () => clearInterval(id);
-  }, [live, loadList]);
+  }, [live, tab, loadList]);
+
+  const resetFilters = () => {
+    setPage(1);
+    setFilters({});
+    setFrom('');
+    setTo('');
+  };
 
   const setF = (k) => (e) => { setPage(1); setFilters((f) => ({ ...f, [k]: e.target.value })); };
+  const setDate = (fn) => (v) => { setPage(1); fn(v); };
+
+  const runJobs = async () => {
+    setBusy(true);
+    try {
+      const r = await api.post('/api/admin/system/run-jobs');
+      showToast(r.ran ? t('adminRunJobsDone') : t('adminRunJobsSkipped'), r.ran ? 'success' : 'info');
+      loadSystem();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const flushLogs = async () => {
+    setBusy(true);
+    try {
+      const r = await api.post('/api/admin/system/flush-logs');
+      showToast(r.ran ? t('adminFlushDone', { n: r.removed }) : t('adminFlushSkipped'), r.ran ? 'success' : 'info');
+      setFlushConfirm(false);
+      loadSystem();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const syncStrava = async () => {
+    setBusy(true);
+    try {
+      const r = await api.post('/api/admin/system/backfill-strava');
+      showToast(r.message || 'Strava sync triggered', 'success');
+      loadSystem();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const tabs = (
     <div className="admin__tabs">
       {TABS.map((x) => (
-        <button key={x} className={`admin__tab ${tab === x ? 'is-active' : ''}`} onClick={() => { setTab(x); setPage(1); setFilters({}); }}>
+        <button key={x} className={`admin__tab ${tab === x ? 'is-active' : ''}`} onClick={() => { setTab(x); setPage(1); resetFilters(); }}>
           {t(`admin${x.charAt(0).toUpperCase()}${x.slice(1)}`)}
         </button>
       ))}
@@ -94,6 +157,19 @@ export default function AdminLogs() {
     </div>
   );
 
+  const listFooter = rows ? (
+    <>
+      <AdminPager page={rows.page} limit={rows.limit} total={rows.total} onPage={setPage} />
+      {rows.page * rows.limit < rows.total ? (
+        <div className="admin__pager">
+          <button className="btn btn--secondary btn--sm" onClick={() => setLimit((l) => l + 10)}>
+            {t('adminViewMore')}
+          </button>
+        </div>
+      ) : null}
+    </>
+  ) : null;
+
   return (
     <AdminShell title={t('adminLogs')} actions={tabs}>
       {error ? <p className="ob-error">{error}</p> : null}
@@ -103,8 +179,9 @@ export default function AdminLogs() {
           <div className="admin__filters">
             <input className="admin__filter-input" placeholder="Path" value={filters.path || ''} onChange={setF('path')} />
             <input className="admin__filter-input admin__filter-input--sm" placeholder="Status" value={filters.status || ''} onChange={setF('status')} />
+            <DateRange from={from} to={to} onFrom={setDate(setFrom)} onTo={setDate(setTo)} />
           </div>
-          {loading ? <PageSkeleton variant="admin" /> : renderListTable([
+          {loading && !listEntries.length ? <PageSkeleton variant="admin" /> : renderListTable([
             { key: 'id', label: 'ID' },
             { key: 'path', label: 'Path' },
             { key: 'method', label: 'Method' },
@@ -112,7 +189,7 @@ export default function AdminLogs() {
             { key: 'duration_ms', label: 'ms' },
             { key: 'created_at', label: 'Time', render: (r) => fmtTs(r.created_at) }
           ])}
-          <Pager data={rows} page={page} setPage={setPage} />
+          {listFooter}
         </>
       )}
 
@@ -120,14 +197,15 @@ export default function AdminLogs() {
         <>
           <div className="admin__filters">
             <input className="admin__filter-input admin__filter-input--sm" placeholder="Level" value={filters.level || ''} onChange={setF('level')} />
+            <DateRange from={from} to={to} onFrom={setDate(setFrom)} onTo={setDate(setTo)} />
           </div>
-          {loading ? <PageSkeleton variant="admin" /> : renderListTable([
+          {loading && !listEntries.length ? <PageSkeleton variant="admin" /> : renderListTable([
             { key: 'level', label: 'Level' },
             { key: 'message', label: 'Message', style: { whiteSpace: 'normal', minWidth: 320 } },
             { key: 'path', label: 'Path' },
             { key: 'created_at', label: 'Time', render: (r) => fmtTs(r.created_at) }
           ])}
-          <Pager data={rows} page={page} setPage={setPage} />
+          {listFooter}
         </>
       )}
 
@@ -136,29 +214,43 @@ export default function AdminLogs() {
           <div className="admin__filters">
             <input className="admin__filter-input admin__filter-input--sm" placeholder="Source" value={filters.source || ''} onChange={setF('source')} />
             <input className="admin__filter-input admin__filter-input--sm" placeholder="Type" value={filters.type || ''} onChange={setF('type')} />
+            <DateRange from={from} to={to} onFrom={setDate(setFrom)} onTo={setDate(setTo)} />
           </div>
-          {loading ? <PageSkeleton variant="admin" /> : renderListTable([
+          {loading && !listEntries.length ? <PageSkeleton variant="admin" /> : renderListTable([
             { key: 'source', label: 'Source' },
             { key: 'type', label: 'Type' },
             { key: 'message', label: 'Message', style: { whiteSpace: 'normal', minWidth: 280 } },
             { key: 'created_at', label: 'Time', render: (r) => fmtTs(r.created_at) }
           ])}
-          <Pager data={rows} page={page} setPage={setPage} />
+          {listFooter}
         </>
       )}
 
       {tab === 'system' && system && (
-        <div className="admin__stats">
-          <Stat label={t('adminUptime')} value={fmtUptime(system.uptimeSec)} />
-          <Stat label={t('adminNode')} value={system.node} />
-          <Stat label={t('adminEnv')} value={system.env} />
-          <Stat label={t('adminTimezone')} value={system.timezone} />
-          <Stat label={t('adminDbOk')} value={system.dbOk ? 'OK' : 'DOWN'} />
-          <Stat label={t('adminQueue')} value={system.queueBacklog} />
-          <Stat label={t('adminPending')} value={system.pendingLogWrites} />
-          <Stat label={t('adminMemory')} value={fmtMem(system.memory.rss)} />
-          <Stat label={t('adminLogCounts')} value={`${system.logCounts.requests} / ${system.logCounts.errors} / ${system.logCounts.events}`} />
-        </div>
+        <>
+          <div className="admin__row-actions" style={{ marginBottom: 'var(--space-4)' }}>
+            <button className="btn btn--primary btn--sm" onClick={runJobs} disabled={busy}>
+              {t('adminRunJobs')}
+            </button>
+            <button className="btn btn--secondary btn--sm" onClick={syncStrava} disabled={busy} title={t('adminSyncStravaHint')}>
+              {t('adminSyncStrava')}
+            </button>
+            <button className="btn btn--secondary btn--sm" onClick={() => setFlushConfirm(true)} disabled={busy}>
+              {t('adminFlushLogs')}
+            </button>
+          </div>
+          <div className="admin__stats">
+            <Stat label={t('adminUptime')} value={fmtUptime(system.uptimeSec)} />
+            <Stat label={t('adminNode')} value={system.node} />
+            <Stat label={t('adminEnv')} value={system.env} />
+            <Stat label={t('adminTimezone')} value={system.timezone} />
+            <Stat label={t('adminDbOk')} value={system.dbOk ? 'OK' : 'DOWN'} />
+            <Stat label={t('adminQueue')} value={system.queueBacklog} />
+            <Stat label={t('adminPending')} value={system.pendingLogWrites} />
+            <Stat label={t('adminMemory')} value={fmtMem(system.memory.rss)} />
+            <Stat label={t('adminLogCounts')} value={`${system.logCounts.requests} / ${system.logCounts.errors} / ${system.logCounts.events}`} />
+          </div>
+        </>
       )}
 
       {tab === 'usage' && usage && (
@@ -184,18 +276,16 @@ export default function AdminLogs() {
           </div>
         </>
       )}
-    </AdminShell>
-  );
-}
 
-function Pager({ data, page, setPage }) {
-  if (!data) return null;
-  const totalPages = Math.max(1, Math.ceil(data.total / data.limit));
-  return (
-    <div className="admin__pager">
-      <button className="btn btn--secondary btn--sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>‹</button>
-      <span className="admin__page">{page} / {totalPages}</span>
-      <button className="btn btn--secondary btn--sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>›</button>
-    </div>
+      <ConfirmDialog
+        open={flushConfirm}
+        title={t('adminFlushLogs')}
+        message={t('adminFlushConfirm')}
+        confirmLabel="Flush"
+        busy={busy}
+        onConfirm={flushLogs}
+        onCancel={() => setFlushConfirm(false)}
+      />
+    </AdminShell>
   );
 }

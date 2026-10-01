@@ -7,7 +7,7 @@ const strava = require('../../services/strava');
 const { importStravaActivity } = require('../../services/stravaImport');
 const { getActiveChallenge } = require('../../services/challengeWindow');
 const { totalForEnrollment } = require('../../services/progress');
-const { emitProgressEvents } = require('../../services/progressEvents');
+const { emitProgressEvents, sendActivityConfirm } = require('../../services/progressEvents');
 const { enqueue } = require('../../services/queue');
 const { logEvent } = require('../../services/logger');
 const { AppError } = require('../../middleware/errors');
@@ -50,9 +50,12 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'Invalid JSON' });
   }
 
-  // No retry: handlers write to the DB and retries risk double-processing
-  // (Strava redelivers events on its own when we ACK late or fail).
-  enqueue(() => handleEvent(event), { maxAttempts: 1 });
+  // Retries are safe here: importStravaActivity upserts by strava_activity_id
+  // and emitProgressEvents only fills unreached milestones / flips the finish
+  // atomically, so a retried event can't double-apply. maxAttempts=3 gives a
+  // transient rate-limit or token refresh a chance instead of dropping the
+  // activity (Strava will not redeliver — we already ACKed 200).
+  enqueue(() => handleEvent(event), { maxAttempts: 3 });
   logEvent({
     source: 'webhook',
     type: 'strava_event',
@@ -109,9 +112,13 @@ async function handleEvent(event) {
     const result = await importStravaActivity(enrollment, activity, event.object_id, challenge);
 
     if (result.imported) {
+      // Keep the connection's last_synced_at fresh so a bulk sync resumes cleanly
+      // instead of re-fetching from an old cutoff.
+      await db('strava_connections').where({ id: conn.id }).update({ last_synced_at: db.fn.now() });
       const total = await totalForEnrollment(enrollment.id);
       const user = await db('users').where({ id: conn.user_id }).first();
-      await emitProgressEvents({ enrollment, total, user: user || { id: conn.user_id } });
+      await emitProgressEvents({ enrollment, total, user: user || { id: conn.user_id }, added: result.quantity || 0 });
+      if (user) await sendActivityConfirm({ user, enrollment, added: result.quantity || 0, total });
     }
   }
 }

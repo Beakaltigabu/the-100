@@ -1,4 +1,6 @@
 const { logError } = require('../services/logger');
+const { noteDbError, isSaturatedError } = require('../services/dbHealth');
+const { alertAdmins } = require('../services/adminAlerts');
 
 class AppError extends Error {
   constructor(message, statusCode = 400, details = null) {
@@ -34,6 +36,13 @@ function errorHandler(err, req, res, next) {
   }
   if (err.name === 'UnauthorizedError' || err.name === 'JsonWebTokenError') {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+  // Shared MySQL saturated ("Too many connections"): note it for the circuit
+  // breaker and tell clients to retry shortly instead of hammering the server.
+  noteDbError(err);
+  if (isSaturatedError(err)) {
+    alertAdmins('MySQL is saturated (too many connections) — requests are being shed.', { category: 'db' }).catch(() => {});
+    return res.status(503).json({ error: 'Service temporarily unavailable', retryAfter: 30 });
   }
   console.error(err);
   logError({

@@ -59,17 +59,28 @@ const messenger = {
 };
 
 const mockLogActivity = vi.fn(async () => ({ ok: true, total: 25 }));
+const commandMock = vi.fn(async () => undefined);
+const onboardMock = vi.fn(async () => undefined);
+const textInputMock = vi.fn(async () => false);
 
 beforeEach(() => {
   messenger.sendToChat.mockClear();
   messenger.approveJoinRequest.mockClear();
   messenger.getUserLanguage.mockClear();
   mockLogActivity.mockClear();
+  commandMock.mockClear();
+  onboardMock.mockClear();
+  textInputMock.mockClear();
   updates.length = 0;
   handlers.__setDeps({
     db: makeDb,
     messenger,
     logActivity: mockLogActivity,
+    botRouter: {
+      handleTextInput: textInputMock,
+      command: commandMock,
+      onboard: onboardMock
+    },
     computeStreaks: async () => [],
     challengeWindow: {
       getActiveChallenge: async () => tables.challenges[0],
@@ -174,12 +185,8 @@ describe('handleMessage', () => {
 
   it('welcomes back an already-linked member on a bare /start', async () => {
     await handlers.handleMessage({ ...privateChat, text: '/start' });
-    expect(messenger.sendToChat).toHaveBeenCalledTimes(1);
-    const text = messenger.sendToChat.mock.calls[0][1];
-    const markup = messenger.sendToChat.mock.calls[0][2];
-    expect(text).toContain('Welcome back');
-    expect(text).toContain('Goal: <b>100 KM</b>');
-    expect(markup).toBeDefined(); // group invite button present
+    expect(commandMock).toHaveBeenCalledWith(2, 7, 'home');
+    expect(messenger.sendToChat).not.toHaveBeenCalled();
   });
 
   it('keeps the link instructions for a bare /start from an unlinked user', async () => {

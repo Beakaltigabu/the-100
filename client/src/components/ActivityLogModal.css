@@ -1,0 +1,27 @@
+.aml {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.aml__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.aml .field__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+@media (max-width: 420px) {
+  .aml__row {
+    grid-template-columns: 1fr;
+  }
+}

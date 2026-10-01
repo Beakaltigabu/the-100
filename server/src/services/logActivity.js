@@ -4,6 +4,8 @@ const { totalForEnrollment } = require('./progress');
 const { emitProgressEvents } = require('./progressEvents');
 const { getActiveChallenge } = require('./challengeWindow');
 const { todayISO } = require('../lib/dates');
+const { awardBadge } = require('./badges');
+const { currentStreakForEnrollment } = require('./streaks');
 
 async function getEnrollmentForUser(userId) {
   const challenge = await getActiveChallenge();
@@ -43,7 +45,16 @@ async function logActivity({ user, date, quantity, activityType, notes }) {
   });
 
   const total = await totalForEnrollment(enrollment.id);
-  const { reached, finished } = await emitProgressEvents({ enrollment, total, user });
+  const { reached, finished } = await emitProgressEvents({ enrollment, total, user, added: quantity });
+
+  // Achievements (idempotent).
+  const countRow = await db('challenge_activities')
+    .whereIn('enrollment_id', db('enrollments').where({ user_id: user.id }).select('id'))
+    .count({ c: '*' })
+    .first();
+  if (Number(countRow.c) === 1) await awardBadge(user.id, 'first_check_in');
+  const streak = await currentStreakForEnrollment(enrollment.id);
+  if (streak >= 7) await awardBadge(user.id, 'streak_7');
 
   return {
     ok: true,

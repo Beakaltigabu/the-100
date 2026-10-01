@@ -147,7 +147,6 @@ router.post(
 
     const lang = await telegramMessenger.getUserLanguage(req.user.id);
     telegramMessenger.sendToUser(req.user.id, botMessages.commitment(lang, goal_value, UNIT_LABEL[unit]));
-    telegramMessenger.broadcastJoin(req.user.name);
 
     res.status(201).json({ message: 'Enrolled', enrollment: summary.enrollment });
   })

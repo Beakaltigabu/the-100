@@ -28,6 +28,13 @@ exports.up = async function up(knex) {
 };
 
 exports.down = async function down(knex) {
+  // Refuse to silently erase data: rolling this back drops the broadcasts
+  // table. Only drop when it is empty (the "cleared on new session" bug was a
+  // rollback/test script wiping real rows).
+  const row = await knex('broadcasts').count({ c: '*' }).first();
+  if (row && Number(row.c) > 0) {
+    throw new Error('Refusing to roll back 20260922000000_broadcasts: broadcasts table is not empty. Back it up or empty it manually first.');
+  }
   await knex.schema.dropTableIfExists('broadcasts');
   await knex.raw(
     "ALTER TABLE `notifications` MODIFY COLUMN `type` ENUM('welcome','commitment','milestone','weekly_checkin','inactivity','finish') NOT NULL"

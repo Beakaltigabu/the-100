@@ -1,5 +1,5 @@
 const db = require('../db');
-const { createNotification } = require('./notifications');
+const { telegramAllowed } = require('./notifications');
 const telegramMessenger = require('./telegramMessenger');
 const { getActiveChallenge } = require('./challengeWindow');
 
@@ -124,31 +124,21 @@ async function dispatch(id, { title, body, titleAm, bodyAm, type, channels, targ
   const targets = await resolveTargets(targeting);
   const counts = { inapp: 0, telegram: 0, group: false };
 
-  // In-app notifications (batch).
+  // In-app delivery is the broadcast banner (GET /api/broadcasts/active), NOT a
+  // notification-center row — broadcasts must never pollute the bell.
+  const inappSent = [];
   if (ch.inapp && targets.length) {
-    const now = db.fn.now();
-    const rows = targets.map((u) => {
-      const m = localized(title, body, titleAm, bodyAm, u.language);
-      return {
-        user_id: u.id,
-        type: type || 'announcement',
-        title: String(m.title).slice(0, 120),
-        body: String(m.body).slice(0, 2000),
-        channel: 'web',
-        sent_at: now
-      };
-    });
-    const CHUNK = 500;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      await db('notifications').insert(rows.slice(i, i + CHUNK));
-    }
-    counts.inapp = rows.length;
+    inappSent.push(...targets.map((u) => u.id));
+    counts.inapp = targets.length;
   }
 
-  // Telegram DMs (fire-and-forget via the retrying queue).
+  // Telegram DMs (fire-and-forget via the retrying queue) — honor telegram prefs.
+  const telegramSent = [];
   if (ch.telegram) {
     for (const u of targets) {
       if (!u.telegram_user_id) continue;
+      if (!(await telegramAllowed(u.id, type || 'announcement'))) continue;
+      telegramSent.push(u.id);
       const m = localized(title, body, titleAm, bodyAm, u.language);
       telegramMessenger.sendToUser(u.id, formatDmMessage({ type, title: m.title, body: m.body }));
       counts.telegram += 1;
@@ -163,8 +153,8 @@ async function dispatch(id, { title, body, titleAm, bodyAm, type, channels, targ
 
   // Record recipients for in-app + telegram (bounded batch).
   const recipientRows = [];
-  if (ch.inapp) for (const u of targets) recipientRows.push({ broadcast_id: id, user_id: u.id, channel: 'inapp', status: 'sent' });
-  if (ch.telegram) for (const u of targets) if (u.telegram_user_id) recipientRows.push({ broadcast_id: id, user_id: u.id, channel: 'telegram', status: 'sent' });
+  if (ch.inapp) for (const uid of inappSent) recipientRows.push({ broadcast_id: id, user_id: uid, channel: 'inapp', status: 'sent' });
+  if (ch.telegram) for (const uid of telegramSent) recipientRows.push({ broadcast_id: id, user_id: uid, channel: 'telegram', status: 'sent' });
   if (recipientRows.length) {
     const CHUNK = 500;
     for (let i = 0; i < recipientRows.length; i += CHUNK) {
@@ -321,17 +311,36 @@ async function softDeleteBroadcast(id) {
   return updated > 0;
 }
 
+// Un-archive a soft-deleted broadcast (deleted_at is the only deletion path —
+// rows are never hard-deleted by the app).
+async function restoreBroadcast(id) {
+  const updated = await db('broadcasts').where({ id }).whereNotNull('deleted_at').update({
+    deleted_at: null,
+    updated_at: db.fn.now()
+  });
+  return updated > 0 ? db('broadcasts').where({ id }).first() : null;
+}
+
 // ── Queries ────────────────────────────────────────────
 
-async function listBroadcasts({ status, limit = 50 } = {}) {
+async function listBroadcasts({ status, limit = 50, includeDeleted = false, page = 1, from, to } = {}) {
   const q = db('broadcasts')
     .leftJoin('users', 'users.id', 'broadcasts.admin_user_id')
-    .whereNull('broadcasts.deleted_at')
     .select('broadcasts.*', 'users.name as admin_name')
-    .orderBy('broadcasts.id', 'desc')
-    .limit(Math.min(200, Math.max(1, limit)));
+    .orderBy('broadcasts.id', 'desc');
+  // Soft-deleted (archived) broadcasts are hidden by default; includeDeleted
+  // surfaces them so they can be restored.
+  if (includeDeleted) {
+    q.whereNotNull('broadcasts.deleted_at');
+  } else {
+    q.whereNull('broadcasts.deleted_at');
+  }
   if (status) q.where('broadcasts.status', status);
-  return q;
+  if (from) q.where('broadcasts.created_at', '>=', `${String(from).slice(0, 10)} 00:00:00`);
+  if (to) q.where('broadcasts.created_at', '<=', `${String(to).slice(0, 10)} 23:59:59`);
+  const totalRow = await q.clone().clearSelect().count({ c: '*' }).first();
+  const rows = await q.limit(Math.min(200, Math.max(1, limit))).offset((page - 1) * limit);
+  return { rows, total: Number(totalRow.c) };
 }
 
 // Highest-priority live broadcast the caller should see, filtered by placement.
@@ -416,6 +425,7 @@ module.exports = {
   publishBroadcast,
   endBroadcast,
   softDeleteBroadcast,
+  restoreBroadcast,
   listBroadcasts,
   getActiveBroadcastFor,
   publishDueScheduled

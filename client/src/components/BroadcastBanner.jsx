@@ -68,15 +68,18 @@ export default function BroadcastBanner() {
   const title = lang === 'am' && broadcast.title_am ? broadcast.title_am : broadcast.title;
   const body = lang === 'am' && broadcast.body_am ? broadcast.body_am : broadcast.body;
   const typeLabel = t(`broadcastType${cap(broadcast.type)}`);
+  const fullText = typeLabel ? `${typeLabel} — ${title}${body ? ` — ${body}` : ''}` : `${title}${body ? ` — ${body}` : ''}`;
 
   return (
-    <div className={`bb ${TYPE_CLASS[broadcast.type] || 'bb--custom'}`} role="status" aria-live="polite">
+    <div className={`bb ${TYPE_CLASS[broadcast.type] || 'bb--custom'}`} role="status" aria-live="polite" title={fullText}>
       <div className="bb__inner">
         <span className="bb__bar" aria-hidden="true" />
         <div className="bb__content">
           {typeLabel ? <span className="bb__label">{typeLabel}</span> : null}
-          <p className="bb__title">{title}</p>
-          {body ? <p className="bb__body">{body}</p> : null}
+          <span className="bb__text">
+            <strong className="bb__title">{title}</strong>
+            {body ? <span className="bb__body"> · {body}</span> : null}
+          </span>
         </div>
         <button className="bb__close" type="button" aria-label="Dismiss" onClick={handleDismiss}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">

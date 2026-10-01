@@ -31,6 +31,9 @@ const TIER_MAP = Object.keys(TIER).reduce((acc, k) => {
   return acc;
 }, {});
 
+// Reaction emoji set (must match routes/community.js).
+const REACTIONS = ['🔥', '👏', '💪', '🏁'];
+
 function unitLabel(activityType) {
   return UNIT_LABEL[unitForActivity(activityType)] || 'KM';
 }
@@ -168,7 +171,11 @@ function toItem(raw) {
     actor,
     isMine: !!raw.isMine,
     ...(raw.kind === 'check_in' ? { postId: Number(raw.id) } : {}),
-    engagement: { cheers: raw._cheers || 0, cheeredByMe: !!raw._cheered }
+    engagement: {
+      reactions: { '🔥': raw._cheers || 0 },
+      total: raw._cheers || 0,
+      myReactions: raw._cheered ? ['🔥'] : []
+    }
   };
   switch (raw.kind) {
     case 'announcement':
@@ -194,7 +201,7 @@ function toItem(raw) {
   }
 }
 
-async function buildFeed({ limit = PAGE_LIMIT, cursor, type, challengeId, viewerId }) {
+async function buildFeed({ limit = PAGE_LIMIT, cursor, type, challengeId, viewerId, followingIds = null }) {
   const pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
   const cursorParsed = parseCursor(cursor);
   const challenge = await activeChallenge();
@@ -240,23 +247,46 @@ async function buildFeed({ limit = PAGE_LIMIT, cursor, type, challengeId, viewer
   // (one GROUP BY + one viewer row lookup) instead of loading every cheer row.
   const cheerKeys = items.filter((i) => i.type !== 'announcement').map((i) => i.id);
   if (cheerKeys.length) {
-    const [countRows, mineRows] = await Promise.all([
-      db('community_cheers').whereIn('item_key', cheerKeys).groupBy('item_key').select('item_key').count({ c: '*' }),
-      db('community_cheers').whereIn('item_key', cheerKeys).where({ user_id: viewerId }).select('item_key')
+    const [countRows, mineRows, commentRows, bookmarkRows] = await Promise.all([
+      db('community_cheers')
+        .whereIn('item_key', cheerKeys)
+        .groupBy('item_key', 'reaction')
+        .select('item_key', 'reaction')
+        .count({ c: '*' }),
+      db('community_cheers').whereIn('item_key', cheerKeys).where({ user_id: viewerId }).select('item_key', 'reaction'),
+      db('community_comments').whereIn('item_key', cheerKeys).groupBy('item_key').select('item_key').count({ c: '*' }),
+      db('community_bookmarks').whereIn('item_key', cheerKeys).where({ user_id: viewerId }).select('item_key')
     ]);
     const counts = {};
-    for (const r of countRows) counts[r.item_key] = Number(r.c);
-    const mine = new Set(mineRows.map((r) => r.item_key));
+    for (const r of countRows) {
+      (counts[r.item_key] = counts[r.item_key] || {}).reactions = { ...(counts[r.item_key] || {}).reactions, [r.reaction]: Number(r.c) };
+    }
+    const comments = {};
+    for (const r of commentRows) comments[r.item_key] = Number(r.c);
+    const saved = new Set(bookmarkRows.map((r) => r.item_key));
+    const mine = new Set(mineRows.map((r) => `${r.item_key}:${r.reaction}`));
     items.forEach((i) => {
       if (i.type === 'announcement') return;
-      i.engagement = { cheers: counts[i.id] || 0, cheeredByMe: mine.has(i.id) };
+      const byReaction = (counts[i.id] && counts[i.id].reactions) || {};
+      const total = Object.values(byReaction).reduce((a, b) => a + b, 0);
+      i.engagement = { reactions: byReaction, total, myReactions: REACTIONS.filter((r) => mine.has(`${i.id}:${r}`)) };
+      i.commentCount = comments[i.id] || 0;
+      i.savedByMe = saved.has(i.id);
     });
   }
 
   const view = type && type !== 'all' ? items.filter((i) => i.type === type) : items;
 
+  // "Following" view: only posts from members the viewer follows (HQ
+  // announcements are not attributed to a followable member).
+  let scoped = view;
+  if (followingIds !== null) {
+    const set = new Set((followingIds || []).map((n) => Number(n)));
+    scoped = view.filter((i) => i.type !== 'announcement' && i.actor && set.has(Number(i.actor.id)));
+  }
+
   // Order: tier asc, then newest first (numeric seq breaks ties deterministically).
-  const sorted = view.sort((a, b) => {
+  const sorted = scoped.sort((a, b) => {
     const t = TIER[a.type] - TIER[b.type];
     if (t !== 0) return t;
     const d = new Date(b.createdAt) - new Date(a.createdAt);

@@ -1,6 +1,6 @@
 -- MySQL dump 10.13  Distrib 8.4.3, for Win64 (x86_64)
 --
--- Host: 127.0.0.1    Database: the100
+-- Host: localhost    Database: the100
 -- ------------------------------------------------------
 -- Server version	8.4.3
 
@@ -33,17 +33,8 @@ CREATE TABLE `admin_audit_log` (
   PRIMARY KEY (`id`),
   KEY `admin_audit_log_admin_user_id_created_at_index` (`admin_user_id`,`created_at`),
   CONSTRAINT `admin_audit_log_admin_user_id_foreign` FOREIGN KEY (`admin_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=194 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `admin_audit_log`
---
-
-LOCK TABLES `admin_audit_log` WRITE;
-/*!40000 ALTER TABLE `admin_audit_log` DISABLE KEYS */;
-/*!40000 ALTER TABLE `admin_audit_log` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `admins`
@@ -60,17 +51,86 @@ CREATE TABLE `admins` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `admins_user_id_unique` (`user_id`),
   CONSTRAINT `admins_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `badges`
+--
+
+DROP TABLE IF EXISTS `badges`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `badges` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `code` varchar(40) NOT NULL,
+  `name` varchar(80) NOT NULL,
+  `icon` varchar(8) NOT NULL,
+  `description` varchar(200) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `badges_code_unique` (`code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `admins`
+-- Table structure for table `bot_settings`
 --
 
-LOCK TABLES `admins` WRITE;
-/*!40000 ALTER TABLE `admins` DISABLE KEYS */;
-/*!40000 ALTER TABLE `admins` ENABLE KEYS */;
-UNLOCK TABLES;
+DROP TABLE IF EXISTS `bot_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `bot_settings` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `milestones_on` tinyint(1) NOT NULL DEFAULT '1',
+  `weekly_on` tinyint(1) NOT NULL DEFAULT '1',
+  `community_on` tinyint(1) NOT NULL DEFAULT '1',
+  `reminders_mode` varchar(20) NOT NULL DEFAULT 'occasionally',
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `bot_settings_user_id_unique` (`user_id`),
+  CONSTRAINT `bot_settings_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `bot_state`
+--
+
+DROP TABLE IF EXISTS `bot_state`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `bot_state` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `state` json DEFAULT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `bot_state_user_id_unique` (`user_id`),
+  CONSTRAINT `bot_state_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `broadcast_recipients`
+--
+
+DROP TABLE IF EXISTS `broadcast_recipients`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `broadcast_recipients` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `broadcast_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `channel` varchar(20) NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'sent',
+  `error` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `broadcast_recipients_broadcast_id_index` (`broadcast_id`),
+  KEY `broadcast_recipients_user_id_index` (`user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=156 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `broadcasts`
@@ -105,47 +165,8 @@ CREATE TABLE `broadcasts` (
   `targeting` json DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `broadcasts_created_at_index` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=79 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `broadcast_recipients`
---
-
-DROP TABLE IF EXISTS `broadcast_recipients`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `broadcast_recipients` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `broadcast_id` bigint unsigned NOT NULL,
-  `user_id` bigint unsigned DEFAULT NULL,
-  `channel` varchar(20) NOT NULL,
-  `status` varchar(20) NOT NULL DEFAULT 'sent',
-  `error` varchar(255) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `broadcast_recipients_broadcast_id_index` (`broadcast_id`),
-  KEY `broadcast_recipients_user_id_index` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `broadcast_recipients`
---
-
-LOCK TABLES `broadcast_recipients` WRITE;
-/*!40000 ALTER TABLE `broadcast_recipients` DISABLE KEYS */;
-/*!40000 ALTER TABLE `broadcast_recipients` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
--- Dumping data for table `broadcasts`
---
-
-LOCK TABLES `broadcasts` WRITE;
-/*!40000 ALTER TABLE `broadcasts` DISABLE KEYS */;
-/*!40000 ALTER TABLE `broadcasts` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `challenge_activities`
@@ -169,17 +190,8 @@ CREATE TABLE `challenge_activities` (
   KEY `challenge_activities_enrollment_id_date_index` (`enrollment_id`,`date`),
   KEY `challenge_activities_date_index` (`date`),
   CONSTRAINT `challenge_activities_enrollment_id_foreign` FOREIGN KEY (`enrollment_id`) REFERENCES `enrollments` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=72 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=120 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `challenge_activities`
---
-
-LOCK TABLES `challenge_activities` WRITE;
-/*!40000 ALTER TABLE `challenge_activities` DISABLE KEYS */;
-/*!40000 ALTER TABLE `challenge_activities` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `challenges`
@@ -199,16 +211,6 @@ CREATE TABLE `challenges` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `challenges`
---
-
-LOCK TABLES `challenges` WRITE;
-/*!40000 ALTER TABLE `challenges` DISABLE KEYS */;
-INSERT INTO `challenges` VALUES (1,'THE 100','100 days. Your goal. Your commitment.','2026-09-23','2026-12-31',1,'2026-09-21 09:41:19');
-/*!40000 ALTER TABLE `challenges` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `community_announcements`
@@ -234,13 +236,67 @@ CREATE TABLE `community_announcements` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `community_announcements`
+-- Table structure for table `community_bookmarks`
 --
 
-LOCK TABLES `community_announcements` WRITE;
-/*!40000 ALTER TABLE `community_announcements` DISABLE KEYS */;
-/*!40000 ALTER TABLE `community_announcements` ENABLE KEYS */;
-UNLOCK TABLES;
+DROP TABLE IF EXISTS `community_bookmarks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `community_bookmarks` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `item_key` varchar(200) NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `community_bookmarks_item_key_user_id_unique` (`item_key`,`user_id`),
+  KEY `community_bookmarks_user_id_index` (`user_id`),
+  CONSTRAINT `community_bookmarks_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `community_challenge_participants`
+--
+
+DROP TABLE IF EXISTS `community_challenge_participants`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `community_challenge_participants` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `challenge_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `joined_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `community_challenge_participants_challenge_id_user_id_unique` (`challenge_id`,`user_id`),
+  KEY `community_challenge_participants_user_id_foreign` (`user_id`),
+  CONSTRAINT `community_challenge_participants_challenge_id_foreign` FOREIGN KEY (`challenge_id`) REFERENCES `community_challenges` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `community_challenge_participants_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `community_challenges`
+--
+
+DROP TABLE IF EXISTS `community_challenges`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `community_challenges` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `title` varchar(120) NOT NULL,
+  `description` varchar(300) DEFAULT NULL,
+  `goal_value` decimal(10,2) NOT NULL,
+  `goal_unit` varchar(10) NOT NULL DEFAULT 'km',
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'active',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `community_challenges_created_by_foreign` (`created_by`),
+  CONSTRAINT `community_challenges_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `community_cheers`
@@ -254,21 +310,53 @@ CREATE TABLE `community_cheers` (
   `item_key` varchar(200) NOT NULL,
   `user_id` bigint unsigned NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `reaction` varchar(8) NOT NULL DEFAULT 0xF09F94A5,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `community_cheers_item_key_user_id_unique` (`item_key`,`user_id`),
+  UNIQUE KEY `community_cheers_item_key_user_id_reaction_unique` (`item_key`,`user_id`,`reaction`),
   KEY `community_cheers_user_id_foreign` (`user_id`),
   CONSTRAINT `community_cheers_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `community_cheers`
+-- Table structure for table `community_comments`
 --
 
-LOCK TABLES `community_cheers` WRITE;
-/*!40000 ALTER TABLE `community_cheers` DISABLE KEYS */;
-/*!40000 ALTER TABLE `community_cheers` ENABLE KEYS */;
-UNLOCK TABLES;
+DROP TABLE IF EXISTS `community_comments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `community_comments` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `item_key` varchar(200) NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `body` text NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `community_comments_item_key_index` (`item_key`),
+  KEY `community_comments_user_id_foreign` (`user_id`),
+  CONSTRAINT `community_comments_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `community_follows`
+--
+
+DROP TABLE IF EXISTS `community_follows`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `community_follows` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `follower_id` bigint unsigned NOT NULL,
+  `following_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `community_follows_follower_id_following_id_unique` (`follower_id`,`following_id`),
+  KEY `community_follows_following_id_index` (`following_id`),
+  CONSTRAINT `community_follows_follower_id_foreign` FOREIGN KEY (`follower_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `community_follows_following_id_foreign` FOREIGN KEY (`following_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `community_posts`
@@ -293,17 +381,8 @@ CREATE TABLE `community_posts` (
   KEY `community_posts_user_id_foreign` (`user_id`),
   KEY `community_posts_feed_idx` (`type`,`status`,`challenge_id`,`created_at`),
   CONSTRAINT `community_posts_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=38 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `community_posts`
---
-
-LOCK TABLES `community_posts` WRITE;
-/*!40000 ALTER TABLE `community_posts` DISABLE KEYS */;
-/*!40000 ALTER TABLE `community_posts` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `community_reports`
@@ -326,15 +405,6 @@ CREATE TABLE `community_reports` (
   CONSTRAINT `community_reports_reporter_id_foreign` FOREIGN KEY (`reporter_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `community_reports`
---
-
-LOCK TABLES `community_reports` WRITE;
-/*!40000 ALTER TABLE `community_reports` DISABLE KEYS */;
-/*!40000 ALTER TABLE `community_reports` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `contact_messages`
@@ -362,15 +432,6 @@ CREATE TABLE `contact_messages` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `contact_messages`
---
-
-LOCK TABLES `contact_messages` WRITE;
-/*!40000 ALTER TABLE `contact_messages` DISABLE KEYS */;
-/*!40000 ALTER TABLE `contact_messages` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
 -- Table structure for table `enrollments`
 --
 
@@ -396,17 +457,8 @@ CREATE TABLE `enrollments` (
   KEY `enrollments_created_at_index` (`created_at`),
   CONSTRAINT `enrollments_challenge_id_foreign` FOREIGN KEY (`challenge_id`) REFERENCES `challenges` (`id`) ON DELETE CASCADE,
   CONSTRAINT `enrollments_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=56 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=112 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `enrollments`
---
-
-LOCK TABLES `enrollments` WRITE;
-/*!40000 ALTER TABLE `enrollments` DISABLE KEYS */;
-/*!40000 ALTER TABLE `enrollments` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `error_logs`
@@ -428,17 +480,8 @@ CREATE TABLE `error_logs` (
   PRIMARY KEY (`id`),
   KEY `error_logs_created_at_index` (`created_at`),
   KEY `error_logs_level_index` (`level`)
-) ENGINE=InnoDB AUTO_INCREMENT=98 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=367 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `error_logs`
---
-
-LOCK TABLES `error_logs` WRITE;
-/*!40000 ALTER TABLE `error_logs` DISABLE KEYS */;
-/*!40000 ALTER TABLE `error_logs` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `event_logs`
@@ -457,17 +500,50 @@ CREATE TABLE `event_logs` (
   PRIMARY KEY (`id`),
   KEY `event_logs_created_at_index` (`created_at`),
   KEY `event_logs_source_index` (`source`)
-) ENGINE=InnoDB AUTO_INCREMENT=40 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=391 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `event_logs`
+-- Table structure for table `event_participants`
 --
 
-LOCK TABLES `event_logs` WRITE;
-/*!40000 ALTER TABLE `event_logs` DISABLE KEYS */;
-/*!40000 ALTER TABLE `event_logs` ENABLE KEYS */;
-UNLOCK TABLES;
+DROP TABLE IF EXISTS `event_participants`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `event_participants` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `event_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `rsvp_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `event_participants_event_id_user_id_unique` (`event_id`,`user_id`),
+  KEY `event_participants_user_id_foreign` (`user_id`),
+  CONSTRAINT `event_participants_event_id_foreign` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `event_participants_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `events`
+--
+
+DROP TABLE IF EXISTS `events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `title` varchar(160) NOT NULL,
+  `description` varchar(500) DEFAULT NULL,
+  `starts_at` datetime NOT NULL,
+  `link` varchar(300) DEFAULT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'upcoming',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `events_created_by_foreign` (`created_by`),
+  CONSTRAINT `events_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `knex_migrations`
@@ -482,18 +558,8 @@ CREATE TABLE `knex_migrations` (
   `batch` int DEFAULT NULL,
   `migration_time` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=39 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `knex_migrations`
---
-
-LOCK TABLES `knex_migrations` WRITE;
-/*!40000 ALTER TABLE `knex_migrations` DISABLE KEYS */;
-INSERT INTO `knex_migrations` VALUES (2,'20260912000000_init.js',1,'2026-09-12 10:41:19'),(3,'20260912150000_add_onboarding_fields.js',2,'2026-09-12 12:27:35'),(4,'20260912160000_activity_aware_goals.js',3,'2026-09-12 13:30:36'),(5,'20260912170000_motivation_multi.js',4,'2026-09-12 18:42:16'),(6,'20260916170000_strava_last_synced.js',5,'2026-09-16 06:59:26'),(7,'20260916180000_oauth_users.js',6,'2026-09-16 07:45:46'),(8,'20260916190000_drop_strava_uid.js',7,'2026-09-16 08:26:10'),(9,'20260916200000_challenge_start_sep21.js',8,'2026-09-16 08:52:29'),(10,'20260916210000_align_enrollments_dates.js',9,'2026-09-16 09:04:59'),(11,'20260916220000_community_posts.js',10,'2026-09-16 09:31:35'),(12,'20260916230000_user_language.js',11,'2026-09-16 11:40:07'),(13,'20260917000000_security_compliance.js',12,'2026-09-16 14:46:44'),(14,'20260917010000_enforce_fks.js',13,'2026-09-16 15:08:20'),(15,'20260917020000_perf_indexes.js',14,'2026-09-16 15:26:45'),(16,'20260918000000_community_redesign.js',15,'2026-09-18 21:09:09'),(17,'20260918010000_community_cheers.js',16,'2026-09-19 03:41:01'),(18,'20260919000000_meta.js',17,'2026-09-19 06:58:23'),(19,'20260920000000_observability.js',18,'2026-09-19 14:30:00'),(20,'20260920000001_contact_messages.js',19,'2026-09-19 14:47:00'),(22,'20260921000000_security_perf.js',20,'2026-09-21 09:41:59'),(23,'20260922000000_broadcasts.js',21,'2026-09-22 00:00:00'),(24,'20260923000000_broadcast_v2.js',22,'2026-09-23 00:00:00'),(25,'20260924000000_user_ban.js',23,'2026-09-24 00:00:00'),(26,'20260925000000_notification_types.js',24,'2026-09-25 00:00:00');
-/*!40000 ALTER TABLE `knex_migrations` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `knex_migrations_lock`
@@ -510,15 +576,6 @@ CREATE TABLE `knex_migrations_lock` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `knex_migrations_lock`
---
-
-LOCK TABLES `knex_migrations_lock` WRITE;
-/*!40000 ALTER TABLE `knex_migrations_lock` DISABLE KEYS */;
-/*!40000 ALTER TABLE `knex_migrations_lock` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
 -- Table structure for table `meta`
 --
 
@@ -532,15 +589,6 @@ CREATE TABLE `meta` (
   PRIMARY KEY (`meta_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `meta`
---
-
-LOCK TABLES `meta` WRITE;
-/*!40000 ALTER TABLE `meta` DISABLE KEYS */;
-/*!40000 ALTER TABLE `meta` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `milestones`
@@ -559,17 +607,28 @@ CREATE TABLE `milestones` (
   UNIQUE KEY `milestones_enrollment_id_threshold_unique` (`enrollment_id`,`threshold`),
   KEY `milestones_reached_at_index` (`reached_at`),
   CONSTRAINT `milestones_enrollment_id_foreign` FOREIGN KEY (`enrollment_id`) REFERENCES `enrollments` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=278 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=494 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `milestones`
+-- Table structure for table `notification_preferences`
 --
 
-LOCK TABLES `milestones` WRITE;
-/*!40000 ALTER TABLE `milestones` DISABLE KEYS */;
-/*!40000 ALTER TABLE `milestones` ENABLE KEYS */;
-UNLOCK TABLES;
+DROP TABLE IF EXISTS `notification_preferences`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notification_preferences` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `channel` varchar(20) NOT NULL,
+  `type` varchar(30) NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT '1',
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `notification_preferences_user_id_channel_type_unique` (`user_id`,`channel`,`type`),
+  CONSTRAINT `notification_preferences_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `notifications`
@@ -591,17 +650,8 @@ CREATE TABLE `notifications` (
   PRIMARY KEY (`id`),
   KEY `notifications_user_id_created_at_index` (`user_id`,`created_at`),
   CONSTRAINT `notifications_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=109 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=382 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `notifications`
---
-
-LOCK TABLES `notifications` WRITE;
-/*!40000 ALTER TABLE `notifications` DISABLE KEYS */;
-/*!40000 ALTER TABLE `notifications` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `password_reset_tokens`
@@ -621,17 +671,8 @@ CREATE TABLE `password_reset_tokens` (
   KEY `password_reset_tokens_token_hash_index` (`token_hash`),
   KEY `password_reset_tokens_user_id_foreign` (`user_id`),
   CONSTRAINT `password_reset_tokens_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `password_reset_tokens`
---
-
-LOCK TABLES `password_reset_tokens` WRITE;
-/*!40000 ALTER TABLE `password_reset_tokens` DISABLE KEYS */;
-/*!40000 ALTER TABLE `password_reset_tokens` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `post_cheers`
@@ -654,13 +695,26 @@ CREATE TABLE `post_cheers` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `post_cheers`
+-- Table structure for table `push_subscriptions`
 --
 
-LOCK TABLES `post_cheers` WRITE;
-/*!40000 ALTER TABLE `post_cheers` DISABLE KEYS */;
-/*!40000 ALTER TABLE `post_cheers` ENABLE KEYS */;
-UNLOCK TABLES;
+DROP TABLE IF EXISTS `push_subscriptions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `push_subscriptions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `endpoint` varchar(500) NOT NULL,
+  `p256dh` varchar(255) NOT NULL,
+  `auth` varchar(255) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `push_subscriptions_endpoint_unique` (`endpoint`),
+  KEY `push_subscriptions_user_id_foreign` (`user_id`),
+  CONSTRAINT `push_subscriptions_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `request_logs`
@@ -687,17 +741,29 @@ CREATE TABLE `request_logs` (
   KEY `request_logs_source_index` (`source`),
   KEY `request_logs_user_id_foreign` (`user_id`),
   CONSTRAINT `request_logs_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=1737 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=20014 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `request_logs`
+-- Table structure for table `session_logs`
 --
 
-LOCK TABLES `request_logs` WRITE;
-/*!40000 ALTER TABLE `request_logs` DISABLE KEYS */;
-/*!40000 ALTER TABLE `request_logs` ENABLE KEYS */;
-UNLOCK TABLES;
+DROP TABLE IF EXISTS `session_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `session_logs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `session_id` varchar(64) NOT NULL,
+  `started_at` timestamp NOT NULL,
+  `last_heartbeat_at` timestamp NOT NULL,
+  `duration_seconds` int NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `session_logs_user_id_last_heartbeat_at_index` (`user_id`,`last_heartbeat_at`),
+  KEY `session_logs_session_id_index` (`session_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `strava_connections`
@@ -724,17 +790,8 @@ CREATE TABLE `strava_connections` (
   UNIQUE KEY `strava_connections_user_id_unique` (`user_id`),
   KEY `strava_connections_strava_athlete_id_index` (`strava_athlete_id`),
   CONSTRAINT `strava_connections_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `strava_connections`
---
-
-LOCK TABLES `strava_connections` WRITE;
-/*!40000 ALTER TABLE `strava_connections` DISABLE KEYS */;
-/*!40000 ALTER TABLE `strava_connections` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `telegram_connections`
@@ -757,17 +814,28 @@ CREATE TABLE `telegram_connections` (
   KEY `telegram_connections_telegram_user_id_index` (`telegram_user_id`),
   KEY `telegram_connections_link_token_hash_index` (`link_token_hash`),
   CONSTRAINT `telegram_connections_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `telegram_connections`
+-- Table structure for table `user_badges`
 --
 
-LOCK TABLES `telegram_connections` WRITE;
-/*!40000 ALTER TABLE `telegram_connections` DISABLE KEYS */;
-/*!40000 ALTER TABLE `telegram_connections` ENABLE KEYS */;
-UNLOCK TABLES;
+DROP TABLE IF EXISTS `user_badges`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `user_badges` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `badge_id` bigint unsigned NOT NULL,
+  `earned_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `user_badges_user_id_badge_id_unique` (`user_id`,`badge_id`),
+  KEY `user_badges_badge_id_foreign` (`badge_id`),
+  CONSTRAINT `user_badges_badge_id_foreign` FOREIGN KEY (`badge_id`) REFERENCES `badges` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `user_badges_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `users`
@@ -800,21 +868,19 @@ CREATE TABLE `users` (
   `language` varchar(10) DEFAULT NULL,
   `token_version` int NOT NULL DEFAULT '0',
   `banned_at` timestamp NULL DEFAULT NULL,
+  `pwa_installed` tinyint(1) NOT NULL DEFAULT '0',
+  `installed_at` timestamp NULL DEFAULT NULL,
+  `notes` text,
   PRIMARY KEY (`id`),
   UNIQUE KEY `users_email_unique` (`email`),
   UNIQUE KEY `users_google_id_unique` (`google_id`),
   KEY `users_banned_at_index` (`banned_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=92 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=166 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `users`
+-- Dumping routines for database 'the100'
 --
-
-LOCK TABLES `users` WRITE;
-/*!40000 ALTER TABLE `users` DISABLE KEYS */;
-/*!40000 ALTER TABLE `users` ENABLE KEYS */;
-UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -825,4 +891,39 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-09-21 12:51:06
+-- Dump completed on 2026-09-29 18:03:48
+-- MySQL dump 10.13  Distrib 8.4.3, for Win64 (x86_64)
+--
+-- Host: localhost    Database: the100
+-- ------------------------------------------------------
+-- Server version	8.4.3
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Dumping data for table `knex_migrations`
+--
+
+/*!40000 ALTER TABLE `knex_migrations` DISABLE KEYS */;
+INSERT INTO `knex_migrations` VALUES (2,'20260912000000_init.js',1,'2026-09-12 10:41:19'),(3,'20260912150000_add_onboarding_fields.js',2,'2026-09-12 12:27:35'),(4,'20260912160000_activity_aware_goals.js',3,'2026-09-12 13:30:36'),(5,'20260912170000_motivation_multi.js',4,'2026-09-12 18:42:16'),(6,'20260916170000_strava_last_synced.js',5,'2026-09-16 06:59:26'),(7,'20260916180000_oauth_users.js',6,'2026-09-16 07:45:46'),(8,'20260916190000_drop_strava_uid.js',7,'2026-09-16 08:26:10'),(9,'20260916200000_challenge_start_sep21.js',8,'2026-09-16 08:52:29'),(10,'20260916210000_align_enrollments_dates.js',9,'2026-09-16 09:04:59'),(11,'20260916220000_community_posts.js',10,'2026-09-16 09:31:35'),(12,'20260916230000_user_language.js',11,'2026-09-16 11:40:07'),(13,'20260917000000_security_compliance.js',12,'2026-09-16 14:46:44'),(14,'20260917010000_enforce_fks.js',13,'2026-09-16 15:08:20'),(15,'20260917020000_perf_indexes.js',14,'2026-09-16 15:26:45'),(16,'20260918000000_community_redesign.js',15,'2026-09-18 21:09:09'),(17,'20260918010000_community_cheers.js',16,'2026-09-19 03:41:01'),(18,'20260919000000_meta.js',17,'2026-09-19 06:58:23'),(19,'20260920000000_observability.js',18,'2026-09-19 14:30:00'),(20,'20260920000001_contact_messages.js',19,'2026-09-19 14:47:00'),(22,'20260921000000_security_perf.js',20,'2026-09-21 09:41:59'),(23,'20260922000000_broadcasts.js',21,'2026-09-22 16:11:50'),(24,'20260923000000_broadcast_v2.js',22,'2026-09-23 15:57:15'),(25,'20260924000000_user_ban.js',23,'2026-09-23 20:21:16'),(26,'20260925000000_notification_types.js',24,'2026-09-24 09:19:40'),(27,'20260926000000_admin_engagement.js',25,'2026-09-25 09:45:45'),(28,'20260927000000_notification_preferences.js',26,'2026-09-27 10:13:46'),(29,'20260928000000_push_subscriptions.js',27,'2026-09-27 10:39:39'),(30,'20260929000000_community_reactions.js',28,'2026-09-27 17:34:10'),(31,'20260930000000_community_comments.js',29,'2026-09-27 17:47:33'),(32,'20261001000000_community_bookmarks.js',30,'2026-09-27 17:58:34'),(33,'20261002000000_community_follows.js',31,'2026-09-27 18:29:02'),(34,'20261003000000_badges.js',32,'2026-09-27 18:42:32'),(35,'20261004000000_community_challenges.js',32,'2026-09-27 18:42:33'),(36,'20261005000000_events.js',33,'2026-09-27 18:52:15'),(37,'20261006000000_bot_state.js',34,'2026-09-28 15:08:11'),(38,'20261007000000_bot_settings.js',34,'2026-09-28 15:08:11');
+/*!40000 ALTER TABLE `knex_migrations` ENABLE KEYS */;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-09-29 18:03:48

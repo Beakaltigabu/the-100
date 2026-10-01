@@ -18,7 +18,10 @@ const deps = {
   computeStreaks: require('../../services/streaks').computeStreaks,
   challengeWindow: require('../../services/challengeWindow'),
   dates: require('../../lib/dates'),
-  helpers: require('../../lib/telegram')
+  helpers: require('../../lib/telegram'),
+  botRouter: require('../../services/botRouter'),
+  botGroupGuard: require('../../services/botGroupGuard'),
+  botMessagesV2: require('../../services/botMessagesV2')
 };
 
 function __setDeps(overrides) {
@@ -75,6 +78,8 @@ router.post('/', (req, res) => {
     enqueue(() => handleNewMembers(message));
   } else if (message && message.text && message.chat && message.chat.type === 'private') {
     enqueue(() => handleMessage(message));
+  } else if (update.callback_query) {
+    enqueue(() => deps.botRouter.handleCallback(update.callback_query));
   } else if (update.chat_join_request) {
     enqueue(() => handleJoinRequest(update.chat_join_request));
   } else if (update.my_chat_member) {
@@ -118,27 +123,22 @@ async function handleMessage(message) {
     ? await deps.messenger.getUserLanguage(conn.user_id)
     : deps.helpers.resolveLanguage(message.from && message.from.language_code);
 
+  // Mid-flow text input (custom distance / date) during the new button flows.
+  if (conn && conn.state === 'active') {
+    const handled = await deps.botRouter.handleTextInput(chatId, conn.user_id, text);
+    if (handled) return;
+  }
+
   if (text.startsWith('/start')) {
     const token = text.split(' ')[1] || '';
     if (!token) {
       // Bare /start: if the sender is already linked, welcome them back with
-      // their own data + the group invite instead of the "go to the app"
+      // their own data + the home buttons instead of the "go to the app"
       // instructions. (Deep-link `?start=` payloads can be dropped by some
       // Telegram clients, so this covers the from-the-app path too.)
       const existing = await getConnByTelegramId(userId);
       if (existing && existing.state === 'active') {
-        const wl = await deps.messenger.getUserLanguage(existing.user_id);
-        const enrollment = await getEnrollment(existing.user_id);
-        if (enrollment) {
-          const unitLabel = UNIT_LABEL[unitForActivity(enrollment.activity_type)] || 'KM';
-          const challenge = await deps.challengeWindow.getActiveChallenge();
-          const started = deps.challengeWindow.hasChallengeStarted(challenge);
-          const day = started
-            ? Math.min(100, Math.max(1, deps.dates.diffDays(enrollment.start_date, deps.dates.todayISO()) + 1))
-            : null;
-          return send(deps.botMessages.welcomeBack(wl, enrollment.goal_value, unitLabel, day), deps.messenger.joinCommunityMarkup(wl));
-        }
-        return send(deps.botMessages.alreadyLinked(wl), deps.messenger.joinCommunityMarkup(wl));
+        return deps.botRouter.command(chatId, existing.user_id, 'home');
       }
       return send(
         deps.botMessages.welcomeNoToken(lang, deps.config.clientOrigin, deps.config.telegram.groupLink),
@@ -149,9 +149,8 @@ async function handleMessage(message) {
     if (!linkConn || !linkConn.link_expires_at || new Date(linkConn.link_expires_at).getTime() < Date.now()) {
       return send(deps.botMessages.invalidToken(lang));
     }
-    const linkLang = await deps.messenger.getUserLanguage(linkConn.user_id);
     if (linkConn.state === 'active') {
-      return send(deps.botMessages.alreadyLinked(linkLang));
+      return send(deps.botMessages.alreadyLinked(lang));
     }
     await deps.db('telegram_connections').where({ id: linkConn.id }).update({
       telegram_user_id: userId,
@@ -161,14 +160,7 @@ async function handleMessage(message) {
       updated_at: deps.db.fn.now()
     });
     const enrollment = await getEnrollment(linkConn.user_id);
-    if (enrollment) {
-      const unitLabel = UNIT_LABEL[unitForActivity(enrollment.activity_type)] || 'KM';
-      return send(
-        deps.botMessages.welcomeLinked(linkLang, enrollment.goal_value, unitLabel, enrollment.start_date, deps.config.telegram.groupLink),
-        deps.messenger.joinCommunityMarkup(linkLang)
-      );
-    }
-    return send(deps.botMessages.noEnrollment(linkLang));
+    return deps.botRouter.onboard(chatId, linkConn.user_id, enrollment);
   }
 
   if (text === '/help') {
@@ -190,6 +182,12 @@ async function handleMessage(message) {
   // Everything below needs a linked account.
   if (!conn) {
     return send(deps.botMessages.notLinked(lang));
+  }
+
+  // New button-first shortcuts (secondary to the keyboard).
+  const NEW_CMDS = { '/progress': 'progress', '/log': 'log', '/milestones': 'milestones', '/community': 'community', '/settings': 'settings' };
+  if (NEW_CMDS[text]) {
+    return deps.botRouter.command(chatId, conn.user_id, NEW_CMDS[text]);
   }
 
   const enrollment = await getEnrollment(conn.user_id);
@@ -295,12 +293,13 @@ async function groupWelcomeContext(tgUserId, firstName) {
 }
 
 async function handleNewMembers(message) {
-  const chatId = message.chat.id;
   for (const member of message.new_chat_members) {
     if (member.is_bot) continue;
     if (isRecentlyWelcomed(member.id)) continue;
     const ctx = await groupWelcomeContext(member.id, member.first_name);
-    deps.messenger.sendToChat(chatId, deps.botMessages.groupWelcome(ctx));
+    // Welcomes are member-join moments, not catalyst content — they bypass the
+    // weekly cap but still only ever target the community group.
+    await deps.botGroupGuard.sendToCommunity(deps.botMessagesV2.groupWelcome(ctx), { force: true });
   }
 }
 
@@ -316,7 +315,7 @@ async function handleJoinRequest(joinRequest) {
     if (approved && !isRecentlyWelcomed(userId)) {
       markWelcome(userId);
       const ctx = await groupWelcomeContext(userId, joinRequest.from.first_name);
-      deps.messenger.sendToChat(chatId, deps.botMessages.groupWelcome(ctx));
+      await deps.botGroupGuard.sendToCommunity(deps.botMessagesV2.groupWelcome(ctx), { force: true });
     }
   } else {
     const reqLang = deps.helpers.resolveLanguage(joinRequest.from && joinRequest.from.language_code);

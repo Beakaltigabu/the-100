@@ -1,0 +1,122 @@
+.lb {
+  background: var(--card-bg);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.lb__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.lb__label {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.lb__tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.lb__tab {
+  border: none;
+  background: none;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--color-muted);
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+.lb__tab.is-active {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.lb__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lb__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.lb__row:last-child {
+  border-bottom: none;
+}
+
+.lb__rank {
+  width: 20px;
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.lb__rank.is-top {
+  color: var(--color-accent);
+}
+
+.lb__person {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--fg);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb__total {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--color-muted);
+}
+
+.lb__you {
+  margin: var(--space-3) 0 0;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--color-accent);
+}
+
+.lb__row.is-me .lb__person {
+  color: var(--color-accent);
+}
+
+.lb__you-tag {
+  margin-left: 0.4em;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  padding: 0.1em 0.5em;
+  vertical-align: middle;
+}

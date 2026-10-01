@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { dayNumber, nextMilestone, reachedThresholds } from '../src/services/progress';
+import { dayNumber, nextMilestone, reachedThresholds, enrollmentStatus } from '../src/services/progress';
 import { TOTAL_DAYS, ACTIVITY_MILESTONES, recommendGoals } from '../src/constants';
+import { todayISO, addDaysISO } from '../src/lib/dates';
 
 const RUN_THRESHOLDS = ACTIVITY_MILESTONES.running;
 const RES_THRESHOLDS = ACTIVITY_MILESTONES.resistance;
@@ -72,5 +73,46 @@ describe('recommendGoals', () => {
   it('recommends smaller km bands for swimming', () => {
     expect(recommendGoals('swimming', 3.5)).toEqual([30, 60, 100, 150]);
     expect(recommendGoals('swimming', 1)).toEqual([15, 30, 60, 100]);
+  });
+});
+
+
+describe('enrollmentStatus (recent-activity grace)', () => {
+  const today = todayISO();
+  // start_date such that the member is on challenge "day"
+  const startForDay = (day) => addDaysISO(today, -(day - 1));
+
+  it('is not_started before the challenge begins', () => {
+    const enrollment = { status: 'active', goal_value: 500, start_date: addDaysISO(today, 1) };
+    expect(enrollmentStatus(enrollment, 0, null)).toBe('not_started');
+  });
+
+  it('is on_track for the first two days even with no activity', () => {
+    const enrollment = { status: 'active', goal_value: 500, start_date: startForDay(2) };
+    expect(enrollmentStatus(enrollment, 0, null)).toBe('on_track');
+  });
+
+  it('is on_track when the member moved recently even below the linear pace', () => {
+    const enrollment = { status: 'active', goal_value: 500, start_date: startForDay(30) };
+    // Day 30 of 500 km -> expected ~135 km; only 20 km but logged recently.
+    expect(enrollmentStatus(enrollment, 20, today)).toBe('on_track');
+    expect(enrollmentStatus(enrollment, 20, addDaysISO(today, -1))).toBe('on_track');
+    expect(enrollmentStatus(enrollment, 20, addDaysISO(today, -2))).toBe('on_track');
+  });
+
+  it('is falling_behind below pace with no recent activity', () => {
+    const enrollment = { status: 'active', goal_value: 500, start_date: startForDay(30) };
+    expect(enrollmentStatus(enrollment, 20, addDaysISO(today, -5))).toBe('falling_behind');
+  });
+
+  it('is inactive with no activity or > 7 days of silence', () => {
+    const enrollment = { status: 'active', goal_value: 500, start_date: startForDay(30) };
+    expect(enrollmentStatus(enrollment, 0, null)).toBe('inactive');
+    expect(enrollmentStatus(enrollment, 20, addDaysISO(today, -8))).toBe('inactive');
+  });
+
+  it('is on_track when at or above the linear pace', () => {
+    const enrollment = { status: 'active', goal_value: 500, start_date: startForDay(30) };
+    expect(enrollmentStatus(enrollment, 150, addDaysISO(today, -10))).toBe('on_track');
   });
 });

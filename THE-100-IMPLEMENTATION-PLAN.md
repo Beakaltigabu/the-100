@@ -45,18 +45,27 @@ Notify members (in-app + Telegram + group) that Strava connection is temporarily
 ### Phase C — Broadcast (full)
 - Segments (language, activity type, enrollment status, active/inactive), scheduling, delivery tracking (`broadcast_recipients`).
 
-### Phase D — Bot enrichment (button-based)
-- `callback_query` support + inline-keyboard menu.
-- Button-based guided check-in (quick-pick + custom distance via `bot_state`).
-- Richer commands (`/progress`, `/history`, `/next`).
-- Daily personalized reminders (`preferred_time` + `schedule_days`).
-- Admin suite: `/admin`, `/trigger`, `/nudge`, `/broadcast`, `/block`, `/users`.
-- Group enrichment: weekly activity board + member spotlight.
+### Phase D — THE 100 BOT (personal companion) ✅ COMPLETE
+> Redesigned per the BOT spec (2026-09-28). See `THE-100-BOT-TEST-MATRIX.md`.
+- Foundation: `bot_state` + `bot_settings` migrations, `callback_query` routing + inline keyboards, English-only messaging, `botGroupGuard` (community-group-only + ≤4/week cap), `sendToUser` markup support.
+- Personal companion: home (active/not-started/completed), My Progress, guided log flow (type→distance→date→confirm), goal-adaptive milestones, Strava state + connect, completion + WHAT'S NEXT, community pulse, settings, share → website community post, People-like-you (same activity+goal, unranked), onboarding (YOU'RE IN → SEE MY 100 → tracking choice → READY), command shortcuts.
+- Private notifications (6 categories): activity confirmation (Strava), milestone celebration, challenge-day moments (1/10/25/50/75/90/99/100), weekly recap, re-engagement (cooldown + reminders setting), completion — settings-gated.
+- Group catalyst (≤4/week): rotating conversation starters, collective-distance thresholds, curated member moments (first step / major milestone / finish), group challenge moments, new-member welcome. Daily digest + per-event broadcasts removed. No-HQ enforced architecturally.
+- `/language` + bilingual group messaging removed from the bot UX (website stays bilingual).
 
 ### Phase E — Admin panel
 - Analytics (DAU/MAU, activities/km, enrollment funnel).
 - User management (suspend/ban, delete, edit, role).
 - System health + control (scheduler "run now", log flush, DB stats, version).
+
+### Phase F — Dashboard redesign (psychology-backed) 🆕
+- Single focal hierarchy: streak/chain → "Today's move" (primary CTA + quick-log presets) → progress identity (ring + chain + %) → Why (collapsible) → 7-day sparkline → community pulse → milestone path → quick-log flow.
+- Streak strip ("don't break the chain" — loss aversion); next-milestone/finish distance (goal-gradient); post-log feedback; empty-state countdown + day-1 preview (endowed progress).
+- Mostly client-side + a few small aggregates.
+
+### Phase G — Community page rehaul 🆕
+- Weekly movers board + streak leaderboard; comments/replies; multiple reactions; member spotlight; cross-post to Telegram group (opt-in); badges & achievements; shared "Our 100" community ring; daily prompts; follow members; community search; bookmarks; events & meetups (RSVP); weekly in-app digest; upgraded/pinned announcements.
+- **Excluded by decision:** crews/accountability groups, buddy pairing, photo/media check-ins.
 
 ---
 
@@ -85,19 +94,39 @@ Notify members (in-app + Telegram + group) that Strava connection is temporarily
 - [ ] `POST/DELETE /api/push/subscribe`
 - [ ] Subscription banner + permission flow
 
-### 🟡 P2 — Bot enrichment (Phase D)
-- [ ] `callback_query` support (webhook + setwebhook `allowed_updates`)
-- [ ] Keyboard builders + button menu
-- [ ] Button-based check-in + `bot_state` table
-- [ ] `/progress`, `/history`, `/next`
-- [ ] Daily reminders job (`sendDailyReminders`)
-- [ ] Admin resolver + `/admin` suite + manual trigger endpoint
-- [ ] Weekly activity board + member spotlight
+### ✅ Bot — THE 100 BOT (Phase D, complete — see `THE-100-BOT-TEST-MATRIX.md`)
+- [x] `callback_query` support (webhook + setwebhook `allowed_updates`) + `bot_state`/`bot_settings`
+- [x] Keyboard builders + button menu + command shortcuts
+- [x] Guided log flow (type → distance → date → confirm)
+- [x] Home/progress/milestones/strava/completion/settings/community-pulse screens
+- [x] Onboarding (deep-link) + share → website community post + People-like-you
+- [x] Private notifications (6 categories) + challenge-day moments + weekly recap + re-engagement cooldown
+- [x] Group catalyst (≤4/week): starters, collective distance, member moments, challenge moments; no-HQ guard
 
 ### 🟡 P2 — Admin panel (Phase E)
-- [ ] Analytics endpoint + page
-- [ ] User management actions (ban/delete/edit/role)
-- [ ] System health/control (scheduler "run now", log flush, DB stats, version)
+- [x] Analytics endpoint + page
+- [x] User management actions (ban/delete/edit/role)
+- [x] System health/control (scheduler "run now", log flush, DB stats, version)
+- [x] List pagination, filters, date selectors (audit/logs/support/members/broadcasts)
+
+### 🔵 P1 — Dashboard redesign (Phase F)
+- [ ] Focal hierarchy + "Today's move" primary CTA + quick-log presets
+- [ ] Streak strip + next-milestone/finish distance readout
+- [ ] 7-day sparkline + post-log feedback animation
+- [ ] Collapsible "Why" + community pulse snippet + empty-state countdown
+- [ ] i18n / dark mode / a11y / client build + manual verify
+
+### 🟢 P2 — Community rehaul (Phase G)
+- [x] Weekly movers board + streak leaderboard
+- [x] Comments/replies + multiple reactions
+- [x] Member spotlight + badges & achievements
+- [x] Shared "Our 100" ring + daily prompts
+- [x] Follow members + community search + bookmarks
+- [x] Cross-post to Telegram (opt-in) + weekly in-app digest
+- [x] Events & meetups (RSVP) + upgraded/pinned announcements
+- [x] Pass 4: streak strip + social proof ticker + composer prominence + follow system
+- [x] Pass 5: badges/achievements + community challenges + leaderboard
+- [x] Pass 6: daily quest + weekly recap/digest + celebration confetti + events + cross-post
 
 ---
 
@@ -107,4 +136,6 @@ Notify members (in-app + Telegram + group) that Strava connection is temporarily
 - Broadcast targeting: full segments (Phase C); MVP = all users
 - Scheduling: now + scheduled (Phase C); MVP = now only
 - Preferences: per-user opt-out per channel/type
-- Bot: button-based UI, guided check-in, no in-bot onboarding (stays on the app)
+- Bot: THE 100 BOT personal companion ✅ (button-first, English-only, 6 notification categories, group catalyst ≤4/week, no-HQ guard)
+- Dashboard: single focal action ("Today's move") + streaks + next-milestone framing; psychology-backed (loss aversion, goal-gradient, mastery, commitment, social proof)
+- Community: include weekly movers, comments, reactions, spotlight, badges, "Our 100", prompts, follow, search, bookmarks, events, digest, pinned announcements; **exclude crews, buddy pairing, photo/media check-ins**

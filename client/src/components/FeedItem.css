@@ -118,7 +118,8 @@
 .fi__foot {
   display: flex;
   align-items: center;
-  gap: 18px;
+  flex-wrap: wrap;
+  gap: 8px 18px;
   margin-top: 4px;
 }
 
@@ -150,6 +151,42 @@
 
 .fi__cheer-mark {
   font-size: 0.9rem;
+}
+
+/* Reaction bar (multi-reaction) */
+.fi__reactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.fi__reaction {
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  text-transform: none;
+  font-size: 0.72rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.fi__reaction:hover {
+  border-color: var(--cm-accent);
+}
+
+.fi__reaction.is-reacted {
+  background: var(--color-accent-soft);
+  border-color: var(--cm-accent);
+}
+
+.fi__reaction-emoji {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.fi__reaction-count {
+  font-weight: 800;
 }
 
 /* Kicker (milestone / finish / join / announcement) */

@@ -119,6 +119,9 @@ module.exports = {
   TOTAL_DAYS: 100,
 
   ON_TRACK_TOLERANCE: 0.9,
+  // A member who has logged within this many days counts as on track (grace for
+  // movement even when below the linear pace target).
+  RECENT_ACTIVE_DAYS: 2,
 
   recommendGoals,
   milestonesForActivity,

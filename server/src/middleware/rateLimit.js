@@ -25,6 +25,8 @@ const cheerLimiter = makeLimiter({ windowMs: 15 * 60 * 1000, max: 60 });
 
 const reportLimiter = makeLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 
+const commentLimiter = makeLimiter({ windowMs: 60 * 1000, max: 10 });
+
 // Global API guardrail (webhooks excluded — they get their own limiter).
 const apiLimiter = makeLimiter({
   windowMs: 15 * 60 * 1000,
@@ -52,6 +54,7 @@ module.exports = {
   postLimiter,
   cheerLimiter,
   reportLimiter,
+  commentLimiter,
   apiLimiter,
   oauthLimiter,
   connectLimiter,

@@ -38,24 +38,48 @@ function MemberAvatar({ actor, onMemberClick }) {
   return avatar;
 }
 
-export default function FeedItem({ item, onCheer, onShare, onDelete, onReport, onMemberClick }) {
+export default function FeedItem({ item, onReact, onSave, onCrossPost, onDelete, onReport, onMemberClick }) {
   const { t } = useLanguage();
   const actor = item.actor || {};
   const d = item.data || {};
-  const cheers = item.engagement ? item.engagement.cheers : 0;
-  const cheered = item.engagement ? item.engagement.cheeredByMe : false;
+  const engagement = item.engagement || {};
+  const reactions = engagement.reactions || {};
+  const myReactions = engagement.myReactions || [];
   const isMine = item.isMine;
   const unit = t('unitKm');
 
-  const cheerBtn = (className = '') => (
+  const saveBtn = () => (
     <button
-      className={`fi__action ${cheered ? 'is-cheered' : ''} ${className}`.trim()}
-      onClick={() => onCheer(item)}
-      aria-pressed={cheered}
+      className={`fi__action ${item.savedByMe ? 'is-cheered' : ''}`.trim()}
+      onClick={() => onSave && onSave(item)}
+      title={item.savedByMe ? t('saved') : t('save')}
+      aria-pressed={!!item.savedByMe}
     >
-      <span className="fi__cheer-mark">{cheered ? '✦' : '✧'}</span> {t('cheer')} {cheers > 0 ? `· ${cheers}` : ''}
+      <span aria-hidden="true">🔖</span>
     </button>
   );
+
+  const crossPostBtn = () =>
+    isMine && item.type === 'check_in' ? (
+      <button className="fi__action" onClick={() => onCrossPost && onCrossPost(item)} title={t('communityCrossPosted')}>
+        📣
+      </button>
+    ) : null;
+
+  const cheerBtn = () => {
+    const n = reactions['🔥'] || 0;
+    const mine = myReactions.includes('🔥');
+    return (
+      <button
+        className={`fi__action ${mine ? 'is-cheered' : ''}`.trim()}
+        onClick={() => onReact(item, '🔥')}
+        aria-pressed={mine}
+        title={t('cheer')}
+      >
+        <span aria-hidden="true">🔥</span> {n > 0 ? n : t('cheer')}
+      </button>
+    );
+  };
 
   if (item.type === 'announcement') {
     return (
@@ -88,10 +112,7 @@ export default function FeedItem({ item, onCheer, onShare, onDelete, onReport, o
         </p>
         <div className="fi__foot">
           <span className="fi__activity">{actor.activityType ? t(activityLabelKey(actor.activityType)) : ''}</span>
-          {cheerBtn()}
-          <button className="fi__action" onClick={() => onShare(item)}>
-            {t('share')}
-          </button>
+          {cheerBtn()}{saveBtn()}
         </div>
       </article>
     );
@@ -106,7 +127,7 @@ export default function FeedItem({ item, onCheer, onShare, onDelete, onReport, o
         <p className="fi__finish-stats">
           {d.goal ?? 0} {d.unit || ''} · 100 DAYS
         </p>
-        <div className="fi__foot">{cheerBtn()}</div>
+        <div className="fi__foot">{cheerBtn()}{saveBtn()}</div>
       </article>
     );
   }
@@ -128,7 +149,7 @@ export default function FeedItem({ item, onCheer, onShare, onDelete, onReport, o
             {d.goal ?? 0} {d.unit || ''}
           </span>
         </p>
-        <div className="fi__foot">{cheerBtn()}</div>
+        <div className="fi__foot">{cheerBtn()}{saveBtn()}</div>
       </article>
     );
   }
@@ -155,7 +176,7 @@ export default function FeedItem({ item, onCheer, onShare, onDelete, onReport, o
         </p>
       ) : null}
       <div className="fi__foot">
-        {cheerBtn()}
+        {cheerBtn()}{saveBtn()}{crossPostBtn()}
         {isMine ? (
           <button className="fi__action fi__action--danger" onClick={() => onDelete(item)}>
             {t('delete')}

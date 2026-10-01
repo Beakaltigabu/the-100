@@ -15,7 +15,7 @@ async function set(url) {
   const qs = new URLSearchParams({
     url,
     secret_token: secretToken,
-    allowed_updates: JSON.stringify(['message', 'edited_message', 'my_chat_member', 'chat_join_request'])
+    allowed_updates: JSON.stringify(['message', 'edited_message', 'my_chat_member', 'chat_join_request', 'callback_query'])
   });
   const res = await fetch(`${base}/setWebhook?${qs.toString()}`);
   console.log('secret_token:', secretToken);

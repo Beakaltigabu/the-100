@@ -26,7 +26,10 @@ export default function SessionTracker() {
 
   useEffect(() => {
     if (!user || user.pwaInstalled) return;
-    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+    const standalone =
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      navigator.standalone === true; // iOS Safari
+    if (standalone) {
       api.post('/api/session/installed').catch(() => {});
     }
   }, [user]);

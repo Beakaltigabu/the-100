@@ -74,6 +74,23 @@
   justify-content: space-between;
 }
 
+.pf-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-install {
+  color: var(--pf-accent);
+}
+
+.pf-install-hint {
+  font-size: 0.72rem;
+  color: var(--pf-secondary);
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
 .pf-logo {
   font-family: var(--font-display-condensed);
   font-size: 1.15rem;

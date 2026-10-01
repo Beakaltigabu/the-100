@@ -14,6 +14,7 @@ import { ErrorState } from '../components/States';
 import PageSkeleton from '../components/PageSkeleton';
 import { milestonesForActivity } from '../lib/activity';
 import { openSafeUrl } from '../lib/url';
+import useInstallPrompt from '../hooks/useInstallPrompt';
 import { MOTIVATION_KEYS, MOTIVATION_MAX, motivationLabelKey, motivationPhraseKey } from '../lib/motivation';
 import './Profile.css';
 
@@ -34,6 +35,8 @@ export default function Profile() {
   usePageMeta({ title: 'Profile', path: '/profile', index: false });
   const { t } = useLanguage();
   const { user, refresh, logout } = useAuth();
+  const { canInstall, isInstalled, install } = useInstallPrompt();
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [data, setData] = useState(null);
@@ -194,9 +197,21 @@ export default function Profile() {
           <span className="pf-logo">
             THE <span className="pf-logo__slash">/</span> 100
           </span>
-          <button className="pf-icon-btn" onClick={() => setEditOpen(true)} aria-label={t('editProfile')}>
-            ⚙
-          </button>
+          <div className="pf-header__actions">
+            {canInstall ? (
+              <button className="pf-icon-btn pf-install" onClick={install} aria-label={t('installApp')} title={t('installApp')}>
+                ⬇
+              </button>
+            ) : null}
+            {isIOS && !isInstalled ? (
+              <span className="pf-install-hint" title={t('addToHomeScreen')}>
+                {t('addToHomeScreen')}
+              </span>
+            ) : null}
+            <button className="pf-icon-btn" onClick={() => setEditOpen(true)} aria-label={t('editProfile')}>
+              ⚙
+            </button>
+          </div>
         </div>
 
         <div className="pf-identity">

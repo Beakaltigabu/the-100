@@ -709,6 +709,7 @@ router.get(
       db('challenge_activities')
         .where({ enrollment_id: enrollment.id })
         .where('date', '>=', weekStart)
+        .groupBy('date')
         .select('date')
         .sum({ total: 'quantity' }),
       db('user_badges')

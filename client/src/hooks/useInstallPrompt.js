@@ -1,7 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
+import { api } from '../api/client';
+
+function isStandalone() {
+  return (
+    (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+    (typeof navigator !== 'undefined' && navigator.standalone === true) // iOS Safari
+  );
+}
 
 // Captures the browser's install prompt so we can surface our own
-// "Install THE 100" banner and trigger the native prompt on demand.
+// "Install THE 100" banner/button and trigger the native prompt on demand.
 export default function useInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -14,9 +22,12 @@ export default function useInstallPrompt() {
     const onInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
+      // Report the install moment so the admin "Installed" count updates as soon
+      // as a user installs (not only when they next open it standalone).
+      api.post('/api/session/installed').catch(() => {});
     };
 
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    if (isStandalone()) {
       setIsInstalled(true);
     }
 

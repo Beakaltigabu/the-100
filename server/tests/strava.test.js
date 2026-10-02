@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mapStravaType, localDateOf } from '../src/services/stravaImport';
+import { mapStravaType, acceptsStravaType, localDateOf } from '../src/services/stravaImport';
 import { resolveSyncAfter } from '../src/services/stravaSync';
 import { RateLimitedError, record, canCall, guardCall, usage } from '../src/services/stravaRateLimit';
 
@@ -16,6 +16,36 @@ describe('mapStravaType', () => {
     expect(mapStravaType('Workout')).toBeNull();
     expect(mapStravaType('AlpineSki')).toBeNull();
     expect(mapStravaType('VirtualRide')).toBeNull();
+  });
+});
+
+describe('acceptsStravaType', () => {
+  it('running members accept runs but not rides, walks or swims', () => {
+    expect(acceptsStravaType('running', 'running')).toBe(true);
+    expect(acceptsStravaType('running', 'cycling')).toBe(false);
+    expect(acceptsStravaType('running', 'walking')).toBe(false);
+    expect(acceptsStravaType('running', 'swimming')).toBe(false);
+  });
+
+  it('cycling members accept rides but not runs', () => {
+    expect(acceptsStravaType('cycling', 'cycling')).toBe(true);
+    expect(acceptsStravaType('cycling', 'running')).toBe(false);
+  });
+
+  it('run_walk members accept both runs and walks', () => {
+    expect(acceptsStravaType('run_walk', 'running')).toBe(true);
+    expect(acceptsStravaType('run_walk', 'walking')).toBe(true);
+    expect(acceptsStravaType('run_walk', 'cycling')).toBe(false);
+  });
+
+  it('resistance members accept no Strava distance imports', () => {
+    expect(acceptsStravaType('resistance', 'running')).toBe(false);
+    expect(acceptsStravaType('resistance', 'cycling')).toBe(false);
+  });
+
+  it('unknown enrollment types accept nothing', () => {
+    expect(acceptsStravaType(undefined, 'running')).toBe(false);
+    expect(acceptsStravaType(null, 'running')).toBe(false);
   });
 });
 

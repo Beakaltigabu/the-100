@@ -2,6 +2,25 @@ const db = require('../db');
 const { STRAVA_IMPORT_TYPES } = require('../constants');
 const { APP_TIMEZONE, todayISO } = require('../lib/dates');
 
+// Which Strava activity types a member's chosen activity_type accepts. `run_walk`
+// is a combined pick, so Strava Run + Walk both count; resistance is sessions
+// (no Strava distance import) and `other` has no Strava mapping.
+const STRAVA_ACCEPT = {
+  running: ['running'],
+  walking: ['walking'],
+  run_walk: ['running', 'walking'],
+  cycling: ['cycling'],
+  swimming: ['swimming'],
+  resistance: [],
+  other: []
+};
+
+// True when a Strava-mapped app type belongs to the member's selected activity.
+function acceptsStravaType(enrollmentType, appType) {
+  const accepted = STRAVA_ACCEPT[enrollmentType] || [];
+  return accepted.includes(appType);
+}
+
 // Map a Strava activity type to an app type, or null if unsupported.
 function mapStravaType(type) {
   const map = {
@@ -54,6 +73,11 @@ async function importStravaActivity(enrollment, activity, objectId, challenge) {
   if (!appType) {
     return { imported: false, reason: 'unsupported-type' };
   }
+  // Only import activities matching the member's chosen activity type (e.g. a
+  // "running" member must not get their Strava rides/walks counted).
+  if (!acceptsStravaType(enrollment.activity_type, appType)) {
+    return { imported: false, reason: 'activity-type-mismatch' };
+  }
   const distanceKm = (activity.distance || 0) / 1000;
   if (distanceKm <= 0) {
     return { imported: false, reason: 'no-distance' };
@@ -92,4 +116,4 @@ async function importStravaActivity(enrollment, activity, objectId, challenge) {
   return { imported: true, type: appType, quantity: payload.quantity };
 }
 
-module.exports = { mapStravaType, localDateOf, importStravaActivity };
+module.exports = { mapStravaType, acceptsStravaType, localDateOf, importStravaActivity };

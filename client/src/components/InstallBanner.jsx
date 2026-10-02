@@ -2,7 +2,7 @@ import { useState } from 'react';
 import './InstallBanner.css';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import useInstallPrompt from '../hooks/useInstallPrompt';
+import { useInstallPromptContext } from '../context/InstallPromptContext';
 import Button from './Button';
 
 const DISMISS_KEY = 'the100_install_dismissed';
@@ -10,7 +10,7 @@ const DISMISS_KEY = 'the100_install_dismissed';
 export default function InstallBanner() {
   const { user } = useAuth();
   const { t } = useLanguage();
-  const { canInstall, install } = useInstallPrompt();
+  const { canInstall, install } = useInstallPromptContext();
   const [dismissed, setDismissed] = useState(() => {
     try {
       return localStorage.getItem(DISMISS_KEY) === '1';

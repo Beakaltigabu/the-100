@@ -14,12 +14,13 @@ export function pushSupported() {
 }
 
 // navigator.serviceWorker.ready can hang forever when no worker has activated yet
-// (fresh load / registration race). Bound it so the UI never blocks on it.
-async function getServiceWorker(timeoutMs = 4000) {
+// (fresh load / registration race). Bound it so the UI never blocks on it, and
+// prefer an ACTIVE worker (the one actually controlling the page).
+async function getServiceWorker(timeoutMs = 6000) {
   if (!('serviceWorker' in navigator)) return null;
   try {
     return await Promise.race([
-      navigator.serviceWorker.ready,
+      navigator.serviceWorker.ready.then((reg) => reg.active || reg),
       new Promise((_, rej) => setTimeout(() => rej(new Error('sw-ready-timeout')), timeoutMs))
     ]);
   } catch {

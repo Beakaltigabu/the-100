@@ -84,11 +84,19 @@
   color: var(--pf-accent);
 }
 
-.pf-install-hint {
-  font-size: 0.72rem;
+.pf-install-cta {
+  margin-top: 16px;
+}
+
+.pf-install-ios {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  line-height: 1.4;
   color: var(--pf-secondary);
-  padding: 0 6px;
-  white-space: nowrap;
+  background: color-mix(in srgb, var(--pf-accent) 10%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--pf-accent) 45%, transparent);
+  border-radius: var(--radius);
+  padding: 10px 12px;
 }
 
 .pf-logo {

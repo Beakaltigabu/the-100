@@ -14,7 +14,7 @@ import { ErrorState } from '../components/States';
 import PageSkeleton from '../components/PageSkeleton';
 import { milestonesForActivity } from '../lib/activity';
 import { openSafeUrl } from '../lib/url';
-import useInstallPrompt from '../hooks/useInstallPrompt';
+import { useInstallPromptContext } from '../context/InstallPromptContext';
 import { MOTIVATION_KEYS, MOTIVATION_MAX, motivationLabelKey, motivationPhraseKey } from '../lib/motivation';
 import './Profile.css';
 
@@ -35,7 +35,7 @@ export default function Profile() {
   usePageMeta({ title: 'Profile', path: '/profile', index: false });
   const { t } = useLanguage();
   const { user, refresh, logout } = useAuth();
-  const { canInstall, isInstalled, install } = useInstallPrompt();
+  const { canInstall, isInstalled, install } = useInstallPromptContext();
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -198,21 +198,11 @@ export default function Profile() {
             THE <span className="pf-logo__slash">/</span> 100
           </span>
           <div className="pf-header__actions">
-            {canInstall ? (
-              <button className="pf-icon-btn pf-install" onClick={install} aria-label={t('installApp')} title={t('installApp')}>
-                ⬇
-              </button>
-            ) : null}
-            {isIOS && !isInstalled ? (
-              <span className="pf-install-hint" title={t('addToHomeScreen')}>
-                {t('addToHomeScreen')}
-              </span>
-            ) : null}
-            <button className="pf-icon-btn" onClick={() => setEditOpen(true)} aria-label={t('editProfile')}>
-              ⚙
-            </button>
-          </div>
+          <button className="pf-icon-btn" onClick={() => setEditOpen(true)} aria-label={t('editProfile')}>
+            ⚙
+          </button>
         </div>
+      </div>
 
         <div className="pf-identity">
           <Avatar url={data.user.photoUrl} name={data.user.name} />
@@ -226,6 +216,15 @@ export default function Profile() {
         <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
           {t('editProfile')}
         </Button>
+
+        {canInstall ? (
+          <Button variant="primary" full className="pf-install-cta" onClick={install}>
+            ⬇ {t('installApp')}
+          </Button>
+        ) : null}
+        {isIOS && !isInstalled ? (
+          <p className="pf-install-ios">{t('addToHomeScreen')}</p>
+        ) : null}
       </header>
 
       {challenge ? (

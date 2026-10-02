@@ -4,6 +4,15 @@ import { CacheFirst, StaleWhileRevalidate } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 
+// True when this SW is replacing an existing one (a new release), false on the
+// very first install. We only force-reload open tabs on RELEASES — a brand-new
+// visitor should not get an automatic reload on their first visit.
+let updatingExisting = false;
+self.addEventListener('install', (event) => {
+  updatingExisting = !!self.registration.active;
+  event.waitUntil(self.skipWaiting());
+});
+
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
@@ -12,6 +21,28 @@ const manifest = self.__WB_MANIFEST;
 
 cleanupOutdatedCaches();
 precacheAndRoute(manifest);
+
+// On every new release (new SW activation): drop stale runtime caches, take
+// control of all open tabs, and force them to reload so everyone gets the new
+// version without a manual refresh. `cleanupOutdatedCaches` already removes old
+// precaches; the navigation below makes the update apply automatically.
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      await cleanupOutdatedCaches();
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter((k) => k.startsWith('google-fonts-'))
+          .map((k) => caches.delete(k))
+      );
+      await self.clients.claim();
+      if (!updatingExisting) return;
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      await Promise.all(clients.map((client) => client.navigate(client.url).catch(() => {})));
+    })()
+  );
+});
 
 // SPA shell — navigation falls back to index.html. Only meaningful once the
 // precache manifest is populated (production); in dev the manifest is empty and

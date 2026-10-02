@@ -6,23 +6,29 @@ import Button from './Button';
 import { pushSupported, currentSubscription, subscribeToPush } from '../lib/push';
 import './PushBanner.css';
 
-const DISMISS_KEY = 'the100_push_dismissed';
+const ASK_KEY = 'the100_push_last_asked';
+
+// Local-day key so the banner is shown at most once per day per browser.
+function todayKey() {
+  return new Date().toDateString();
+}
 
 export default function PushBanner() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
-  // Dismissed per session so a user who isn't subscribed is asked on every
-  // new login session (per requirement), until they subscribe or deny.
-  const [dismissed, setDismissed] = useState(() => {
+  // Ask at most once per day (persisted across sessions) — not every login.
+  const [lastAsked, setLastAsked] = useState(() => {
     try {
-      return sessionStorage.getItem(DISMISS_KEY) === '1';
+      return localStorage.getItem(ASK_KEY) || '';
     } catch {
-      return false;
+      return '';
     }
   });
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const dismissed = lastAsked === todayKey();
 
   // Show by default (subscribed=false); only hide once a real subscription is
   // confirmed. The SW-ready check is time-bounded in lib/push so this can't hang.
@@ -32,6 +38,15 @@ export default function PushBanner() {
   }, []);
 
   useEffect(check, [check]);
+
+  const markAsked = useCallback(() => {
+    try {
+      localStorage.setItem(ASK_KEY, todayKey());
+    } catch {
+      /* ignore */
+    }
+    setLastAsked(todayKey());
+  }, []);
 
   const denied = typeof Notification !== 'undefined' && Notification.permission === 'denied';
   if (!user || !pushSupported() || subscribed || dismissed || denied) return null;
@@ -44,20 +59,13 @@ export default function PushBanner() {
       showToast(t('pushEnabled'), 'success');
     } catch {
       showToast(t('pushError'), 'error');
-      setDismissed(true);
+      markAsked(); // don't nag mid-session; retry tomorrow
     } finally {
       setBusy(false);
     }
   };
 
-  const dismiss = () => {
-    try {
-      sessionStorage.setItem(DISMISS_KEY, '1');
-    } catch {
-      /* ignore */
-    }
-    setDismissed(true);
-  };
+  const dismiss = () => markAsked();
 
   return (
     <div className="push-banner" role="dialog" aria-label={t('pushEnable')}>

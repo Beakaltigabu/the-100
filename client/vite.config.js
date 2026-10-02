@@ -52,7 +52,13 @@ function requireApiUrl() {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const apiOrigin = env.VITE_API_URL || process.env.VITE_API_URL || 'https://api.chooseyour100.com';
+  // Per-build id — changes on every build so the app can detect a new release
+  // and wipe stale cache / reload automatically.
+  const BUILD_ID = process.env.VITE_BUILD_ID || Date.now();
   return {
+    define: {
+      __BUILD_ID__: JSON.stringify(String(BUILD_ID))
+    },
     plugins: [
       react(),
       requireApiUrl(),
@@ -62,6 +68,9 @@ export default defineConfig(({ mode }) => {
         srcDir: 'src',
         filename: 'sw.js',
         registerType: 'autoUpdate',
+        // We register the SW ourselves (main.jsx via virtual:pwa-register) so the
+        // auto-update flow (SKIP_WAITING -> activate -> controllerchange) works.
+        injectRegister: false,
         devOptions: {
           enabled: true,
           type: 'module'

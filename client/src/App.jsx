@@ -3,6 +3,7 @@ import { Routes, Route, Link, Navigate } from 'react-router-dom';
 import Navigation from './components/Navigation';
 import AppFooter from './components/AppFooter';
 import InstallBanner from './components/InstallBanner';
+import { InstallPromptProvider } from './context/InstallPromptContext';
 import PushBanner from './components/PushBanner';
 import BroadcastBanner from './components/BroadcastBanner';
 import SessionTracker from './components/SessionTracker';
@@ -69,22 +70,33 @@ function LanguageSync() {
 }
 
 export default function App() {
-  // When the auto-updating service worker takes control (new release), reload
-  // once so the user sees the new version immediately instead of the old shell.
+  // Force a clean load when the build id changes: wipe stale caches, unregister
+  // any stale service worker, and reload — so users never keep an old version.
+  // (The SW itself force-reloads open tabs on every new release via `activate`;
+  // this is the fallback for the next load, e.g. iOS where navigate can be flaky.)
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
-    let reloaded = false;
-    const onControllerChange = () => {
-      if (reloaded) return;
-      reloaded = true;
-      window.location.reload();
-    };
-    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
-    return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+    try {
+      const last = localStorage.getItem('the100_build');
+      if (last && last !== __BUILD_ID__) {
+        if ('serviceWorker' in navigator) {
+          caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).catch(() => {});
+          navigator.serviceWorker
+            .getRegistrations()
+            .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+            .catch(() => {});
+        }
+        localStorage.setItem('the100_build', __BUILD_ID__);
+        window.location.reload();
+        return;
+      }
+      localStorage.setItem('the100_build', __BUILD_ID__);
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   return (
-    <>
+    <InstallPromptProvider>
       <Navigation />
       <BroadcastBanner />
       <ImpersonationBanner />
@@ -249,6 +261,6 @@ export default function App() {
         </ErrorBoundary>
       </main>
       <AppFooter />
-    </>
+    </InstallPromptProvider>
   );
 }

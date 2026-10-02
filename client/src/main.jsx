@@ -6,8 +6,14 @@ import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/Toast';
+import { registerSW } from 'virtual:pwa-register';
 import './styles/tokens.css';
 import './styles/global.css';
+
+// Register the service worker immediately with the auto-update flow
+// (updatefound -> SKIP_WAITING -> activate). A new release then activates and
+// App.jsx reloads once on `controllerchange`.
+registerSW({ immediate: true });
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

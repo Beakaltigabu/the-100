@@ -19,6 +19,7 @@ Thumbs.db
 # Env (keep real secrets out of git)
 server/.env
 server/.env.production
+server/.env.live.bak
 server/.env.prod
 client/.env
 db/.env

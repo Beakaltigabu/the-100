@@ -98,6 +98,40 @@ async function deauthorize(accessToken) {
   return res.ok;
 }
 
+// Push-subscription management (webhooks). Only one active subscription is
+// allowed per application; `listSubscriptions` returns the current one (if any)
+// so a health check can detect a missing/renamed callback and re-subscribe or
+// alert before real-time sync silently stops.
+async function listSubscriptions() {
+  const res = await fetch(
+    `${API_URL}/push_subscriptions?client_id=${config.strava.clientId}&client_secret=${config.strava.clientSecret}`
+  );
+  record(res);
+  if (!res.ok) {
+    throw new Error(`Strava subscription list failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+async function createSubscription(callbackUrl) {
+  const res = await fetch(`${API_URL}/push_subscriptions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: config.strava.clientId,
+      client_secret: config.strava.clientSecret,
+      callback_url: callbackUrl,
+      verify_token: config.strava.verifyToken || ''
+    })
+  });
+  record(res);
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(`Strava subscription create failed: ${res.status} ${JSON.stringify(data)}`);
+  }
+  return data;
+}
+
 function persistTokens(userId, tokens) {
   const payload = {
     encrypted_access_token: encrypt(tokens.access_token),
@@ -117,5 +151,7 @@ module.exports = {
   fetchActivity,
   fetchRecentActivities,
   deauthorize,
-  persistTokens
+  persistTokens,
+  listSubscriptions,
+  createSubscription
 };

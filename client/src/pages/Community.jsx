@@ -19,6 +19,7 @@ import WeeklyRecap from '../components/WeeklyRecap';
 import EventCard from '../components/EventCard';
 import Celebration from '../components/Celebration';
 import TelegramBridge from '../components/TelegramBridge';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { activityLabelKey } from '../lib/activity';
 import { openSafeUrl } from '../lib/url';
 import './Community.css';
@@ -89,6 +90,10 @@ export default function Community() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(null);
   const composerRef = useRef(null);
+
+  // Only the leaderboard slot that is actually visible mounts/fetches — desktop
+  // shows it in the right rail, mobile in the left column — so we never double-fetch.
+  const isDesktop = useMediaQuery('(min-width: 1081px)', () => window.matchMedia('(min-width: 1081px)').matches);
 
   // Fire a celebration when the feed surfaces a NEW milestone/finish of mine.
   useEffect(() => {
@@ -314,9 +319,11 @@ export default function Community() {
               <Your100Summary progress={progress} />
             </ErrorBoundary>
             <StreakStrip progress={progress} />
-            <ErrorBoundary>
-              <Leaderboard onMemberClick={setSelectedMember} />
-            </ErrorBoundary>
+            {!isDesktop ? (
+              <ErrorBoundary>
+                <Leaderboard onMemberClick={setSelectedMember} />
+              </ErrorBoundary>
+            ) : null}
             <WeeklyRecap />
           </aside>
 
@@ -403,9 +410,11 @@ export default function Community() {
           </main>
 
           <aside className="cl-right">
-            <ErrorBoundary>
-              <Leaderboard onMemberClick={setSelectedMember} />
-            </ErrorBoundary>
+            {isDesktop ? (
+              <ErrorBoundary>
+                <Leaderboard onMemberClick={setSelectedMember} />
+              </ErrorBoundary>
+            ) : null}
             <ErrorBoundary>
               <MembersRoster people={people} onMemberClick={setSelectedMember} />
             </ErrorBoundary>

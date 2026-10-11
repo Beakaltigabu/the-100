@@ -1,11 +1,12 @@
 const express = require('express');
 const db = require('../../db');
 const config = require('../../config');
-const { hmac, decrypt } = require('../../lib/crypto');
+const { hmac } = require('../../lib/crypto');
 const { timingSafeEqualStr } = require('../../lib/timing');
 const strava = require('../../services/strava');
 const { importStravaActivity } = require('../../services/stravaImport');
 const { getActiveChallenge } = require('../../services/challengeWindow');
+const { getValidAccessToken } = require('../../services/stravaSync');
 const { totalForEnrollment } = require('../../services/progress');
 const { emitProgressEvents, sendActivityConfirm } = require('../../services/progressEvents');
 const { enqueue } = require('../../services/queue');
@@ -81,7 +82,10 @@ async function handleEvent(event) {
   const objectType = event.object_type; // activity | athlete
   const athleteId = event.owner_id || event.athlete_id;
 
-  if (objectType === 'athlete' && aspect === 'update' && event.updates?.authorized === false) {
+  // Strava sends `authorized` as the STRING "false" (not a boolean) when an
+  // athlete revokes access from their own settings — accept both forms.
+  const authorized = event.updates?.authorized;
+  if (objectType === 'athlete' && aspect === 'update' && (authorized === false || authorized === 'false')) {
     await db('strava_connections')
       .where({ strava_athlete_id: athleteId })
       .update({
@@ -124,25 +128,18 @@ async function handleEvent(event) {
 }
 
 async function getAccessToken(conn) {
+  // Shared with the bulk/periodic sync path — one implementation for refresh,
+  // expiry, and encrypted-token handling everywhere.
   try {
-    const expiresAt = conn.token_expires_at ? new Date(conn.token_expires_at).getTime() : 0;
-    if (expiresAt > Date.now() + 60 * 1000) {
-      return decrypt(conn.encrypted_access_token);
-    }
-    const refreshToken = decrypt(conn.encrypted_refresh_token);
-    const tokens = await strava.refreshAccessToken(refreshToken);
-    const encrypted = strava.persistTokens(conn.user_id, tokens);
+    return await getValidAccessToken(conn);
+  } catch (err) {
+    // Unreadable/expired tokens (e.g. ENCRYPTION_KEY changed) can never sync —
+    // mark the connection disconnected so the member reconnects instead of
+    // silently failing forever.
+    console.error('Strava webhook token error:', err.message);
     await db('strava_connections')
       .where({ id: conn.id })
-      .update({
-        encrypted_access_token: encrypted.encrypted_access_token,
-        encrypted_refresh_token: encrypted.encrypted_refresh_token,
-        token_expires_at: encrypted.token_expires_at,
-        updated_at: db.fn.now()
-      });
-    return tokens.access_token;
-  } catch (err) {
-    console.error('Strava webhook token error:', err.message);
+      .update({ status: 'disconnected', updated_at: db.fn.now() });
     return null;
   }
 }

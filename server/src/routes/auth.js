@@ -10,9 +10,12 @@ const googleAuth = require('../services/googleAuth');
 const { authLimiter, loginLimiter, registerLimiter, oauthLimiter, forgotLimiter, resetLimiter } = require('../middleware/rateLimit');
 const { recordFailure, remainingBlock, clear } = require('../lib/loginGuard');
 const { sanitizeName } = require('../lib/sanitize');
+const { normalizeEmail } = require('../lib/emails');
 const passwordReset = require('../services/passwordReset');
 const telegramMessenger = require('../services/telegramMessenger');
 const botMessages = require('../services/botMessages');
+const mailer = require('../services/mailer');
+const { logEvent } = require('../services/logger');
 
 const router = express.Router();
 
@@ -44,6 +47,16 @@ function sanitizeReturn(v) {
   return v;
 }
 
+// Look up a member by their email, matching the exact address OR its normalized
+// form (Gmail dots/plus folded) — so jane.smith@gmail.com and janesmith@gmail.com
+// resolve to the same account instead of letting someone create a duplicate.
+function findByEmail(email) {
+  const normalized = normalizeEmail(email);
+  const q = db('users').where({ email });
+  if (normalized && normalized !== email) q.orWhere({ email_normalized: normalized });
+  return q.first();
+}
+
 router.post(
   '/register',
   registerLimiter,
@@ -54,16 +67,18 @@ router.post(
     }
     const { name, email, password } = parsed.data;
     const cleanName = sanitizeName(name);
+    const normalized = normalizeEmail(email);
 
-    const existing = await db('users').where({ email }).first();
+    const existing = await findByEmail(email);
     if (existing) {
-      throw new AppError('An account with this email already exists', 409);
+      throw new AppError('An account with this email already exists', 409, { code: 'email_exists' });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
     const [id] = await db('users').insert({
       name: cleanName,
       email,
+      email_normalized: normalized || null,
       password_hash: passwordHash
     });
 
@@ -94,7 +109,7 @@ router.post(
       throw new AppError('Too many failed attempts. Try again later.', 429);
     }
 
-    const user = await db('users').where({ email }).first();
+    const user = await findByEmail(email);
     // Always run a bcrypt.compare (against a dummy hash when the account is
     // missing or passwordless) so response timing doesn't reveal which
     // emails are registered, and always return the same generic message.
@@ -119,28 +134,57 @@ router.post('/logout', (req, res) => {
   res.json({ message: 'Logged out' });
 });
 
-// ── Password reset (delivered via Telegram DM) ──────
+// ── Password reset (email + Telegram) ────────────────
+// A reset link is delivered by every channel the member has (email when SMTP is
+// configured, Telegram DM when linked) so a forgotten password never leads a
+// member to create a duplicate account.
 router.post(
   '/forgot-password',
   forgotLimiter,
   asyncHandler(async (req, res) => {
     const parsed = z.object({ email: z.string().trim().toLowerCase().email().max(255) }).safeParse(req.body);
     if (!parsed.success) {
-      return res.json({ message: 'If that account exists and is linked to Telegram, a reset link was sent.' });
+      return res.json({ message: 'If an account exists with that email, a reset link was sent.' });
     }
     const { email } = parsed.data;
-    const user = await db('users').where({ email }).first();
+    const user = await findByEmail(email);
     if (user) {
       passwordReset.pruneExpired().catch(() => {});
+      // Always hand out a fresh token; deliver via EVERY channel available to
+      // the member (email first, Telegram too) so a forgotten password never
+      // blocks someone into creating a duplicate account.
+      const token = await passwordReset.createResetToken(user.id);
+      const url = `${config.clientOrigin}/reset-password?token=${token}`;
+      const lang = await telegramMessenger.getUserLanguage(user.id);
+
+      let delivered = false;
+      const mailRes = await mailer.send({
+        to: user.email,
+        subject: lang === 'am' ? 'የTHE 100 የይለፍ ቃል መቀየሪያ አገናኝ' : 'Your THE 100 password reset link',
+        text:
+          (lang === 'am' ? `እንደገና መግባት እንዲችሉ ይህንን አገናኝ ይክፈቱ፡ ${url}` : `Open this link to reset your password: ${url}`) +
+          '\n\n' +
+          (lang === 'am' ? 'አገናኙ ለ15 ደቂቃ ብቻ የሚሰራ ነው።' : 'The link is valid for 15 minutes.')
+      });
+      if (mailRes.sent) delivered = true;
+
       const conn = await db('telegram_connections').where({ user_id: user.id, state: 'active' }).first();
       if (conn && conn.telegram_user_id) {
-        const token = await passwordReset.createResetToken(user.id);
-        const url = `${config.clientOrigin}/reset-password?token=${token}`;
-        const lang = await telegramMessenger.getUserLanguage(user.id);
         telegramMessenger.sendToUser(user.id, botMessages.resetLink(lang, url));
+        delivered = true;
+      }
+
+      if (!delivered) {
+        logEvent({
+          source: 'auth',
+          type: 'reset_no_channel',
+          message: `Password reset for user ${user.id} had no delivery channel (no SMTP, no Telegram)`,
+          meta: { userId: String(user.id) }
+        }).catch(() => {});
       }
     }
-    res.json({ message: 'If that account exists and is linked to Telegram, a reset link was sent.' });
+    // Generic reply regardless of existence — never reveal which emails exist.
+    res.json({ message: 'If an account exists with that email, a reset link was sent.' });
   })
 );
 
@@ -217,7 +261,7 @@ router.get(
       throw new AppError('Google email address is not verified', 400);
     }
 
-    let user = await db('users').where({ email }).first();
+    let user = await findByEmail(email);
     if (!user) {
       // Login mode must not create an account (also prevents re-login after
       // account deletion). Send them to register with an inline message.
@@ -228,6 +272,7 @@ router.get(
       const [id] = await db('users').insert({
         name: info.name || email.split('@')[0],
         email,
+        email_normalized: normalizeEmail(email) || null,
         password_hash: null,
         google_id: info.sub,
         email_verified: true,

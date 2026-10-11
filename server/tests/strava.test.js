@@ -115,4 +115,24 @@ describe('stravaRateLimit', () => {
     record(fakeRes);
     expect(usage().shortUsage).toBe(before + 1);
   });
+
+  it('prefers the read-limit headers for activity reads', () => {
+    // Overall limit says we have lots of budget; the READ limit is nearly spent —
+    // the guard must use the stricter (read) numbers.
+    const fakeRes = {
+      headers: {
+        get: (h) => {
+          if (h === 'X-ReadRateLimit-Limit') return '100,1000';
+          if (h === 'X-ReadRateLimit-Usage') return '90,400';
+          if (h === 'X-RateLimit-Limit') return '200,2000';
+          if (h === 'X-RateLimit-Usage') return '110,800';
+          return null;
+        }
+      }
+    };
+    record(fakeRes);
+    expect(usage().shortLimit).toBe(100);
+    expect(usage().shortUsage).toBe(90);
+    expect(canCall()).toBe(false);
+  });
 });

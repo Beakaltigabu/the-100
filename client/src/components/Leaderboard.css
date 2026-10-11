@@ -27,6 +27,12 @@
   gap: 4px;
 }
 
+.lb__tabs--period {
+  margin: 6px 0 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-line);
+}
+
 .lb__tab {
   border: none;
   background: none;
@@ -41,6 +47,46 @@
 .lb__tab.is-active {
   background: var(--color-accent-soft);
   color: var(--color-accent);
+}
+
+.lb__state {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+.lb__state .skeleton--row {
+  height: 18px;
+  border-radius: 6px;
+}
+
+.lb__empty {
+  margin: var(--space-3) 0 0;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.lb__error {
+  align-items: flex-start;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+
+.lb__error p {
+  margin: 0;
+}
+
+.lb__retry {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  cursor: pointer;
 }
 
 .lb__list {

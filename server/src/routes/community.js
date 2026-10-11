@@ -246,49 +246,127 @@ router.post(
 );
 
 // ── Leaderboard ──────────────────────────────────────
+// Rankings are segmented by goal UNIT (km vs sessions) so a resistance member's
+// "sessions" are never ranked against a runner's kilometers. Uses a MySQL 8
+// RANK() window for correct tie handling in one pass, groups by user id only,
+// and caches the (shared) top-list briefly since it changes slowly.
+const LB_TTL_MS = 30 * 1000;
+let lbCache = {}; // `${period}:${unit}` -> { at, entries }
+
+function lbCached(period, unit) {
+  const key = `${period}:${unit}`;
+  const hit = lbCache[key];
+  if (hit && Date.now() - hit.at < LB_TTL_MS) return hit.entries;
+  return null;
+}
+function lbStore(period, unit, entries) {
+  const key = `${period}:${unit}`;
+  lbCache[key] = { at: Date.now(), entries };
+  // Keep the tiny cache bounded.
+  const keys = Object.keys(lbCache);
+  if (keys.length > 20) delete lbCache[keys[0]];
+}
+
+function activityTypesForUnit(unit) {
+  return ACTIVITY_TYPES.filter((t) => unitForActivity(t) === unit);
+}
+
 router.get(
   '/leaderboard',
   asyncHandler(async (req, res) => {
     const period = req.query.period === 'all' ? 'all' : 'week';
+    const unit = req.query.unit === 'sessions' ? 'sessions' : 'km';
     const weekStart = startOfWeek(todayISO());
     const challenge = await getActiveChallenge();
     if (!challenge) return res.json({ entries: [], viewer: null });
 
-    const rows = await db('challenge_activities')
-      .join('enrollments', 'enrollments.id', 'challenge_activities.enrollment_id')
-      .join('users', 'users.id', 'enrollments.user_id')
-      .where('enrollments.challenge_id', challenge.id)
-      .whereIn('enrollments.status', ['committed', 'active'])
-      .modify((q) => {
-        if (period === 'week') q.where('challenge_activities.date', '>=', weekStart);
-      })
-      .groupBy('users.id', 'users.name', 'users.photo_url', 'enrollments.activity_type')
-      .select('users.id as user_id', 'users.name', 'users.photo_url', 'enrollments.activity_type')
-      .sum({ total: 'challenge_activities.quantity' })
-      .orderBy('total', 'desc')
-      .limit(10);
+    const unitTypes = activityTypesForUnit(unit);
 
-    const entries = rows.map((r) => ({
-      id: r.user_id,
-      name: r.name,
-      avatarUrl: r.photo_url || null,
-      total: Math.round(Number(r.total) * 100) / 100,
-      unit: unitLabel(r.activity_type),
-      isMe: r.user_id === req.user.id
-    }));
-    const allRows = await db('challenge_activities')
+    let entries = lbCached(period, unit);
+    if (!entries) {
+      // Upper triangle: RANK() OVER (...) for correct ties, grouped by the user's
+      // PRIMARY KEY ONLY — name/photo are functionally dependent on users.id, so
+      // this stays valid under only_full_group_by while avoiding the old group-by
+      // (name/photo/activity_type) that could split one member into several rows.
+      const rows = await db('challenge_activities')
+        .join('enrollments', 'enrollments.id', 'challenge_activities.enrollment_id')
+        .join('users', 'users.id', 'enrollments.user_id')
+        .where('enrollments.challenge_id', challenge.id)
+        .whereIn('enrollments.status', ['committed', 'active'])
+        .whereIn('enrollments.activity_type', unitTypes)
+        .modify((q) => {
+          if (period === 'week') q.where('challenge_activities.date', '>=', weekStart);
+        })
+        .groupBy('users.id')
+        .select('users.id as user_id', 'users.name', 'users.photo_url')
+        .sum({ total: 'challenge_activities.quantity' })
+        .select(db.raw('RANK() OVER (ORDER BY SUM(challenge_activities.quantity) DESC) AS rnk'))
+        .orderByRaw('rnk ASC, users.id ASC')
+        .limit(10);
+      entries = rows.map((r) => ({
+        id: r.user_id,
+        name: r.name,
+        avatarUrl: r.photo_url || null,
+        total: Math.round(Number(r.total) * 100) / 100,
+        unit,
+        rank: Number(r.rnk),
+        isMe: r.user_id === req.user.id
+      }));
+      lbStore(period, unit, entries);
+    }
+
+    // Live rank for the viewer (not cached — it's per-user). Uses dense-style
+    // counting on the same grouped data so it stays correct outside the top 10.
+    const me = await db('challenge_activities')
       .join('enrollments', 'enrollments.id', 'challenge_activities.enrollment_id')
-      .where('enrollments.challenge_id', challenge.id)
+      .where({ 'enrollments.user_id': req.user.id, 'enrollments.challenge_id': challenge.id })
       .whereIn('enrollments.status', ['committed', 'active'])
+      .whereIn('enrollments.activity_type', unitTypes)
       .modify((q) => {
         if (period === 'week') q.where('challenge_activities.date', '>=', weekStart);
       })
-      .groupBy('enrollments.user_id')
-      .select('enrollments.user_id')
       .sum({ total: 'challenge_activities.quantity' })
-      .orderBy('total', 'desc');
-    const rank = allRows.findIndex((r) => r.user_id === req.user.id) + 1;
-    res.json({ entries, viewer: { rank: rank || null, total: allRows.length } });
+      .first();
+    const myTotal = Number(me && me.total) || 0;
+
+    let viewerRank = null;
+    let viewerCount = 0;
+    if (myTotal > 0) {
+      const before = await db('challenge_activities')
+        .join('enrollments', 'enrollments.id', 'challenge_activities.enrollment_id')
+        .where('enrollments.challenge_id', challenge.id)
+        .whereIn('enrollments.status', ['committed', 'active'])
+        .whereIn('enrollments.activity_type', unitTypes)
+        .modify((q) => {
+          if (period === 'week') q.where('challenge_activities.date', '>=', weekStart);
+        })
+        .groupBy('enrollments.user_id')
+        .having(db.raw('SUM(challenge_activities.quantity) > ?', [myTotal]))
+        .count({ c: 'enrollments.user_id' })
+        .first();
+      const ties = await db('challenge_activities')
+        .join('enrollments', 'enrollments.id', 'challenge_activities.enrollment_id')
+        .where('enrollments.challenge_id', challenge.id)
+        .whereIn('enrollments.status', ['committed', 'active'])
+        .whereIn('enrollments.activity_type', unitTypes)
+        .modify((q) => {
+          if (period === 'week') q.where('challenge_activities.date', '>=', weekStart);
+        })
+        .groupBy('enrollments.user_id')
+        .having(db.raw('SUM(challenge_activities.quantity) = ?', [myTotal]))
+        .count({ c: 'enrollments.user_id' })
+        .first();
+      // Dense rank = number who beat us + 1; people tied with us share it.
+      viewerRank = (Number(before.c) || 0) + 1;
+      viewerCount = (Number(before.c) || 0) + (Number(ties.c) || 0);
+    }
+
+    res.set('Cache-Control', 'private, max-age=15');
+    res.json({
+      entries,
+      unit,
+      viewer: viewerRank ? { rank: viewerRank, total: viewerCount } : { rank: null, total: viewerCount }
+    });
   })
 );
 

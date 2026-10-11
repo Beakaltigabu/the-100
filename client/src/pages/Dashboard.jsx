@@ -107,6 +107,9 @@ export default function Dashboard() {
     if (qs.get('strava') === 'connected') {
       showToast(t('stravaConnected'), 'success');
       window.history.replaceState({}, '', window.location.pathname);
+    } else if (qs.get('strava') === 'already_linked') {
+      showToast(t('stravaAlreadyLinked'), 'error');
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, [t, showToast]);
 
@@ -215,6 +218,34 @@ export default function Dashboard() {
       .catch((err) => showToast(err.message, 'error'))
       .finally(() => setStravaSyncing(false));
   };
+
+  // Live Strava refresh: while a member with Strava connected keeps the app
+  // open, heartbeat the server so the smart poller syncs new activities for
+  // them, and refresh the dashboard the moment the server reports a newer sync.
+  const lastSyncedAtRef = useRef(null);
+  useEffect(() => {
+    if (!integrations.stravaConnected) return;
+    let alive = true;
+    const tick = () => {
+      api.post('/api/integrations/strava/ping').catch(() => {});
+      api
+        .get('/api/integrations/strava/status')
+        .then((sv) => {
+          if (!alive || !sv?.connected || !sv.lastSyncedAt) return;
+          if (sv.lastSyncedAt !== lastSyncedAtRef.current) {
+            lastSyncedAtRef.current = sv.lastSyncedAt;
+            if (lastSyncedAtRef.current) load();
+          }
+        })
+        .catch(() => {});
+    };
+    tick();
+    const id = setInterval(tick, 90 * 1000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [integrations.stravaConnected, load]);
 
   if (loading) return <PageSkeleton variant="dashboard" />;
   if (error) return <ErrorState message={error} onRetry={load} />;

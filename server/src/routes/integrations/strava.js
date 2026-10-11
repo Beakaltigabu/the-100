@@ -7,6 +7,7 @@ const { connectLimiter } = require('../../middleware/rateLimit');
 const strava = require('../../services/strava');
 const { decrypt } = require('../../lib/crypto');
 const { getValidAccessToken, backfillRecent, syncStrava } = require('../../services/stravaSync');
+const { markActive } = require('../../services/stravaPoller');
 
 const router = express.Router();
 
@@ -31,6 +32,9 @@ router.get(
     if (!conn || conn.status !== 'connected') {
       return res.json({ configured: true, connected: false });
     }
+    // Fetching status means the member is (probably) using the app right now —
+    // tell the smart poller so their new Strava activities sync within ~2 min.
+    markActive(req.user.id);
     res.json({
       configured: true,
       connected: true,
@@ -82,6 +86,20 @@ router.get(
 
     const tokens = await strava.exchangeCode(code);
     const encrypted = strava.persistTokens(userId, tokens);
+
+    // Strict duplicate prevention: a Strava athlete may belong to exactly ONE
+    // THE 100 account. If this athlete is already connected to a DIFFERENT
+    // member, refuse to link (never silently steal the connection).
+    const athleteId = tokens.athlete && tokens.athlete.id;
+    if (athleteId) {
+      const bound = await db('strava_connections')
+        .where({ strava_athlete_id: athleteId, status: 'connected' })
+        .whereNot({ user_id: userId })
+        .first();
+      if (bound) {
+        return res.redirect(`${config.clientOrigin}/profile?strava=already_linked`);
+      }
+    }
 
     let conn = await db('strava_connections').where({ user_id: userId }).first();
     if (conn) {
@@ -162,6 +180,7 @@ router.post(
     if (!conn || conn.status !== 'connected') {
       throw new AppError('Connect Strava before syncing', 409);
     }
+    markActive(req.user.id);
     const result = await syncStrava(req.user.id);
     res.json({
       imported: result.imported,
@@ -169,6 +188,22 @@ router.post(
       rateLimited: result.rateLimited,
       lastSyncedAt: new Date().toISOString()
     });
+  })
+);
+
+// Lightweight heartbeat: keeps the member in the "online" window so the smart
+// poller syncs their recent Strava activities even while they idle on a page.
+router.post(
+  '/ping',
+  connectLimiter,
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const conn = await getStoredConnection(req.user.id);
+    if (!conn || conn.status !== 'connected') {
+      return res.json({ connected: false });
+    }
+    markActive(req.user.id);
+    res.json({ connected: true });
   })
 );
 

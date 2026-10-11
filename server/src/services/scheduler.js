@@ -7,6 +7,9 @@ const { getMeta, setMeta } = require('./meta');
 const { logEvent } = require('./logger');
 const { publishDueScheduled } = require('./broadcast');
 const { syncStrava } = require('./stravaSync');
+const strava = require('./strava');
+const stravaPoller = require('./stravaPoller');
+const config = require('../config');
 const { syncMilestones } = require('./milestones');
 const botSettings = require('./botSettings');
 const botGroupGuard = require('./botGroupGuard');
@@ -304,7 +307,7 @@ async function pruneStaleInvites() {
   }
 }
 
-const JOBS = [checkFinishers, checkInactivity, checkWeekly, checkGroupCatalyst, checkChallengeDays, checkGroupChallengeMoments, checkCollectiveDistance, sendAdminDigest, pruneStaleInvites, publishDueScheduled, pruneLogs];
+const JOBS = [checkFinishers, checkInactivity, checkWeekly, checkGroupCatalyst, checkChallengeDays, checkGroupChallengeMoments, checkCollectiveDistance, sendAdminDigest, pruneStaleInvites, publishDueScheduled, pruneLogs, checkStravaSubscription];
 
 // Daily admin digest via the bot: a short morning summary of the system.
 // Runs once per day (meta-gated); skips while the DB is saturated.
@@ -472,6 +475,49 @@ async function pruneLogs({ force = false } = {}) {
   return { ran: true, removed };
 }
 
+// Strava webhook-subscription health: real-time imports depend on an active
+// push subscription pointing at our callback. Runs once per day (also on the
+// first scheduler cycle after boot) and alerts the admin if it's missing or
+// misconfigured — auto-creating when there is none so real-time sync restores.
+async function checkStravaSubscription() {
+  if (!strava.configured()) return { status: 'not-configured' };
+  const day = todayISO();
+  const metaKey = 'strava_sub_check';
+  const last = await getMeta(metaKey);
+  if (last === todayISO()) return { status: 'already-checked' };
+  await setMeta(metaKey, day);
+
+  const expectedCallback = `${String(config.serverBase).replace(/\/$/, '')}/api/webhooks/strava`;
+  try {
+    const subs = await strava.listSubscriptions();
+    const active = (Array.isArray(subs) ? subs : []).find((s) => s && typeof s.id !== 'undefined');
+    if (!active) {
+      const created = await strava.createSubscription(expectedCallback);
+      const id = created && created.id;
+      console.log(`[scheduler] Strava webhook subscription auto-created (id ${id})`);
+      // Notify admins that we were down and restored ourselves.
+      alertAdmins(`Strava webhook subscription was MISSING and has been re-created (id ${id}). Real-time sync is restored.`, {
+        category: 'strava',
+        force: true
+      }).catch(() => {});
+      return { status: 'recreated', id };
+    }
+    if (active.callback_url && active.callback_url.replace(/\/$/, '') !== expectedCallback) {
+      alertAdmins(
+        `Strava webhook subscription points at an unexpected callback: ${active.callback_url}\nExpected: ${expectedCallback}`,
+        { category: 'strava', force: true }
+      ).catch(() => {});
+      return { status: 'callback-mismatch', id: active.id };
+    }
+    return { status: 'ok', id: active.id };
+  } catch (err) {
+    console.error('[scheduler] Strava subscription check failed:', err.message);
+    logEvent({ source: 'strava', type: 'subscription_check_error', message: err.message }).catch(() => {});
+    alertAdmins(`Strava webhook subscription check failed: ${err.message}`, { category: 'strava' }).catch(() => {});
+    return { status: 'error' };
+  }
+}
+
 function startScheduler() {
   const SIX_HOURS = 6 * 60 * 60 * 1000;
   const FOUR_HOURS = 4 * 60 * 60 * 1000;
@@ -485,6 +531,13 @@ function startScheduler() {
   setInterval(() => {
     checkStravaSync().catch((err) => console.error('checkStravaSync failed:', err.message));
   }, FOUR_HOURS);
+  // Smart poll for recently-active members (~2 min): bump the feeder every so
+  // often so the poller runs even if the long cycle stalls. Poller guards its
+  // own per-user cooldown and the shared Strava budget.
+  setInterval(() => {
+    if (!dbHealthy() || !strava.configured()) return;
+    stravaPoller.pollActiveUsers().catch((err) => console.error('stravaPoller failed:', err.message));
+  }, 2 * 60 * 1000);
   // Scheduled broadcasts must go live promptly — poll every minute (skip while
   // MySQL is saturated to avoid piling more load onto a full server).
   setInterval(() => {
@@ -493,4 +546,4 @@ function startScheduler() {
   }, ONE_MINUTE);
 }
 
-module.exports = { runScheduledJobs, checkStravaSync, pruneLogs, checkInactivity, checkWeekly, checkGroupCatalyst, checkChallengeDays, checkGroupChallengeMoments, checkCollectiveDistance, sendAdminDigest, startScheduler };
+module.exports = { runScheduledJobs, checkStravaSync, checkStravaSubscription, pruneLogs, checkInactivity, checkWeekly, checkGroupCatalyst, checkChallengeDays, checkGroupChallengeMoments, checkCollectiveDistance, sendAdminDigest, startScheduler };

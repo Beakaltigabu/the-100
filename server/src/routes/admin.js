@@ -7,6 +7,7 @@ const { dayNumber, enrollmentStatus, enrollmentSummary } = require('../services/
 const { unitForActivity } = require('../constants');
 const { todayISO } = require('../lib/dates');
 const { APP_TIMEZONE } = require('../lib/dates');
+const { normalizeEmail } = require('../lib/emails');
 const { audit } = require('../lib/audit');
 const { queued } = require('../services/logger');
 const { backlog } = require('../services/queue');
@@ -1305,6 +1306,151 @@ router.post(
     }
     audit(req.user.id, 'contact_status', 'contact_message', id, req.ip);
     res.json({ message: 'Updated', id });
+  })
+);
+
+// ── Duplicate accounts (detection + merge) ────────────
+router.get(
+  '/duplicates',
+  asyncHandler(async (req, res) => {
+    // 1) Emails that normalize to the same value (Gmail dots/+ folded).
+    const users = await db('users').select('id', 'name', 'email', 'email_normalized', 'created_at');
+    const emailGroups = new Map();
+    for (const u of users) {
+      const key = u.email_normalized || normalizeEmail(u.email);
+      if (!key) continue;
+      if (!emailGroups.has(key)) emailGroups.set(key, []);
+      emailGroups.get(key).push(u);
+    }
+
+    // 2) One Strava athlete bound to several accounts (pre-unique-index leftovers).
+    const stravaRows = await db('strava_connections')
+      .whereNotNull('strava_athlete_id')
+      .select('user_id', 'strava_athlete_id');
+    const athleteMap = new Map();
+    for (const r of stravaRows) {
+      if (!athleteMap.has(r.strava_athlete_id)) athleteMap.set(r.strava_athlete_id, []);
+      athleteMap.get(r.strava_athlete_id).push(r.user_id);
+    }
+
+    const usersById = new Map(users.map((u) => [u.id, u]));
+    const compact = (ids) =>
+      ids
+        .map((id) => {
+          const u = usersById.get(id);
+          return u
+            ? { id: u.id, name: u.name, email: u.email, createdAt: u.created_at }
+            : { id, name: '?', email: '?', createdAt: null };
+        });
+
+    const groups = [
+      ...[...emailGroups.values()].filter((g) => g.length > 1).map((g) => ({ reason: 'email', users: g.map((u) => ({ id: u.id, name: u.name, email: u.email, createdAt: u.created_at })) })),
+      ...[...athleteMap.values()].filter((g) => g.length > 1).map((g) => ({ reason: 'strava_athlete', users: compact(g) }))
+    ];
+    res.json({ groups });
+  })
+);
+
+// Merge account `otherId` into account `id` (the survivor). Moves the mergee's
+// enrollments, activities, milestones, social content, notifications, badges
+// and integrations; resolves unique-key collisions in favor of the survivor.
+// Everything runs in one transaction and is reverseable only by restoring a
+// backup — so it also writes an audit row and refuses to merge when either
+// account belongs to an admin.
+router.post(
+  '/users/:id/merge/:otherId',
+  asyncHandler(async (req, res) => {
+    const keepId = parseInt(req.params.id, 10);
+    const mergeId = parseInt(req.params.otherId, 10);
+    if (!keepId || !mergeId || keepId === mergeId) {
+      return res.status(400).json({ error: 'Invalid merge targets' });
+    }
+    const keep = await db('users').where({ id: keepId }).first();
+    const merge = await db('users').where({ id: mergeId }).first();
+    if (!keep || !merge) return res.status(404).json({ error: 'User not found' });
+
+    await db.transaction(async (trx) => {
+      // Enrollments share a unique (user_id, challenge_id) — when both accounts
+      // are in the same challenge, fold the mergee's activities/milestones into
+      // the survivor's enrollment, then drop the duplicate enrollment.
+      const mergeEnr = await trx('enrollments').where({ user_id: mergeId }).select('*');
+      for (const enr of mergeEnr) {
+        const keepEnr = await trx('enrollments')
+          .where({ user_id: keepId, challenge_id: enr.challenge_id })
+          .first();
+        if (keepEnr) {
+          await trx('challenge_activities').where({ enrollment_id: enr.id }).update({ enrollment_id: keepEnr.id });
+          await trx('milestones').where({ enrollment_id: enr.id }).update({ enrollment_id: keepEnr.id });
+          await trx('enrollments').where({ id: enr.id }).del();
+        } else {
+          await trx('enrollments').where({ id: enr.id }).update({ user_id: keepId });
+        }
+      }
+
+      // Integrations (telegram/strava have a unique user_id) — keep the survivor's
+      // row; if the survivor has none, take the mergee's.
+      for (const table of ['telegram_connections', 'strava_connections']) {
+        const mergeRow = await trx(table).where({ user_id: mergeId }).first();
+        if (!mergeRow) continue;
+        const keepRow = await trx(table).where({ user_id: keepId }).first();
+        if (keepRow) {
+          await trx(table).where({ id: mergeRow.id }).del();
+        } else {
+          await trx(table).where({ id: mergeRow.id }).update({ user_id: keepId });
+        }
+      }
+
+      // Unique-keyed social rows: delete the mergee's rows that duplicate the
+      // survivor's, then move the rest.
+      const conflictMoves = [
+        { table: 'community_cheers', key: ['item_key', 'user_id'], uidCol: 'user_id' },
+        { table: 'community_bookmarks', key: ['item_key', 'user_id'], uidCol: 'user_id' },
+        { table: 'community_follows', key: ['follower_id', 'following_id'], uidCol: 'follower_id' },
+        { table: 'community_reports', key: ['post_id', 'reporter_id'], uidCol: 'reporter_id' }
+      ];
+      for (const cfg of conflictMoves) {
+        const mergeRows = await trx(cfg.table).where({ [cfg.uidCol]: mergeId }).select('*');
+        for (const row of mergeRows) {
+          const filter = {};
+          for (const k of cfg.key) filter[k] = row[k];
+          const dup = await trx(cfg.table).where(filter).first();
+          if (dup) {
+            await trx(cfg.table).where({ id: row.id }).del();
+          } else {
+            await trx(cfg.table).where({ id: row.id }).update({ [cfg.uidCol]: keepId });
+          }
+        }
+      }
+
+      // user_badges unique (user_id, badge_id).
+      const mergeBadges = await trx('user_badges').where({ user_id: mergeId }).select('badge_id');
+      for (const b of mergeBadges) {
+        const dup = await trx('user_badges').where({ user_id: keepId, badge_id: b.badge_id }).first();
+        if (dup) {
+          await trx('user_badges').where({ user_id: mergeId, badge_id: b.badge_id }).del();
+        } else {
+          await trx('user_badges').where({ user_id: mergeId, badge_id: b.badge_id }).update({ user_id: keepId });
+        }
+      }
+
+      // Plain user_id tables — no unique conflicts to worry about.
+      for (const table of ['community_posts', 'community_comments', 'notifications', 'password_reset_tokens']) {
+        await trx(table).where({ user_id: mergeId }).update({ user_id: keepId });
+      }
+      for (const table of ['community_follows']) {
+        await trx(table).where({ following_id: mergeId }).update({ following_id: keepId });
+      }
+      await trx('admin_audit_log').where({ admin_user_id: mergeId }).update({ admin_user_id: keepId });
+
+      // Password always falls back to the survivor's login. If the mergee had a
+      // password but the survivor is Google-only, keep the survivor's email and
+      // never overwrite a working password.
+      await trx('users').where({ id: keepId }).update({ updated_at: trx.fn.now() });
+      await trx('users').where({ id: mergeId }).del();
+    });
+
+    audit(req.user.id, 'user_merge', 'user', `${mergeId}->${keepId}`, req.ip);
+    res.json({ message: `Merged user ${mergeId} into user ${keepId}` });
   })
 );
 

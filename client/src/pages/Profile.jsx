@@ -71,6 +71,19 @@ export default function Profile() {
 
   useEffect(load, [load]);
 
+  // OAuth return messages: connected vs. "this Strava account is already used".
+  useEffect(() => {
+    const qs = new URLSearchParams(window.location.search);
+    if (qs.get('strava') === 'connected') {
+      showToast(t('stravaConnected'), 'success');
+      window.history.replaceState({}, '', window.location.pathname);
+      load();
+    } else if (qs.get('strava') === 'already_linked') {
+      showToast(t('stravaAlreadyLinked'), 'error');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [t, showToast, load]);
+
   const save = async (e) => {
     e.preventDefault();
     setBusy(true);

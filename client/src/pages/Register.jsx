@@ -23,6 +23,7 @@ export default function Register() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
   const [error, setError] = useState('');
+  const [emailExists, setEmailExists] = useState(false);
   const [busy, setBusy] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [googleNoAccount, setGoogleNoAccount] = useState(false);
@@ -44,6 +45,7 @@ export default function Register() {
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    setEmailExists(false);
     if (!matchOk) {
       setError(t('passwordsMismatch'));
       return;
@@ -58,6 +60,9 @@ export default function Register() {
       showToast(t('registerSuccess'), 'success');
       navigate('/onboarding');
     } catch (err) {
+      if (err?.data?.code === 'email_exists' || err?.status === 409) {
+        setEmailExists(true);
+      }
       setError(authErrorMessage(err, t));
     } finally {
       setBusy(false);
@@ -134,6 +139,17 @@ export default function Register() {
         </label>
 
         {error ? <p className="auth-card__error">{error}</p> : null}
+
+        {emailExists ? (
+          <div className="auth-card__note auth-card__note--warn">
+            <p className="auth-card__note">{t('emailExistsHint')}</p>
+            <span className="auth-card__link-row">
+              <Link to="/login" className="auth-card__link">{t('goToLogin')}</Link>
+              <span className="auth-card__link-sep">·</span>
+              <Link to="/forgot-password" className="auth-card__link">{t('forgotPassword')}</Link>
+            </span>
+          </div>
+        ) : null}
 
         <SubmitButton type="submit" variant="primary" size="lg" full busy={busy} disabled={!valid}>
           {t('register')}

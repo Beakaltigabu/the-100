@@ -36,17 +36,22 @@ function resetIfExpired() {
 }
 
 // Parse Strava rate-limit headers: "100,1000" (limits) and "12,345" (usage).
+// Activity reads (the bulk of our calls) count against the READ (non-upload)
+// budget — X-ReadRateLimit-* — which is typically HALF the overall limit. The
+// overall headers are both reported on every response, so prefer the read ones
+// and fall back to the overall ones for non-read endpoints (token/oauth).
 function record(res) {
   resetIfExpired();
-  const limit = res.headers && res.headers.get('X-RateLimit-Limit');
-  const usage = res.headers && res.headers.get('X-RateLimit-Usage');
-  if (limit) {
-    const [short, long] = limit.split(',').map(Number);
+  const headers = res.headers;
+  const readLimit = headers && (headers.get('X-ReadRateLimit-Limit') || headers.get('X-RateLimit-Limit'));
+  const readUsage = headers && (headers.get('X-ReadRateLimit-Usage') || headers.get('X-RateLimit-Usage'));
+  if (readLimit) {
+    const [short, long] = readLimit.split(',').map(Number);
     if (!Number.isNaN(short)) state.shortLimit = short;
     if (!Number.isNaN(long)) state.longLimit = long;
   }
-  if (usage) {
-    const [short, long] = usage.split(',').map(Number);
+  if (readUsage) {
+    const [short, long] = readUsage.split(',').map(Number);
     if (!Number.isNaN(short)) state.shortUsage = short;
     if (!Number.isNaN(long)) state.longUsage = long;
   } else {

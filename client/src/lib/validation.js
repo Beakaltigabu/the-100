@@ -9,6 +9,11 @@ export function passwordIssues(pw) {
 
 // Maps a server-side 4xx into a clear, translatable message.
 export function authErrorMessage(err, t) {
+  // A duplicate-email registration is the highest-value case: tell the member
+  // their account exists and point them at login/reset instead of a dead end.
+  if (err?.data?.code === 'email_exists' || err?.status === 409) {
+    return t('emailExistsAlready');
+  }
   const fe = err && err.details && err.details.fieldErrors;
   if (fe) {
     const field = Object.keys(fe).find((k) => Array.isArray(fe[k]) && fe[k].length);

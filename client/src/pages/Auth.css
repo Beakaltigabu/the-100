@@ -83,6 +83,17 @@
   transition: opacity 0.15s ease;
 }
 
+.auth-card__link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.auth-card__link-sep {
+  color: var(--color-muted);
+}
+
 /* ── Premium editorial controls (auth card only) ──── */
 .auth-card .field {
   gap: 8px;

@@ -251,18 +251,17 @@ router.post(
 // RANK() window for correct tie handling in one pass, groups by user id only,
 // and caches the (shared) top-list briefly since it changes slowly.
 const LB_TTL_MS = 30 * 1000;
-let lbCache = {}; // `${period}:${unit}` -> { at, entries }
+let lbCache = {}; // `${period}:${unit}:${offset}:${limit}` -> { at, entries, totalCount }
 
-function lbCached(period, unit) {
-  const key = `${period}:${unit}`;
+function lbCached(period, unit, offset, limit) {
+  const key = `${period}:${unit}:${offset}:${limit}`;
   const hit = lbCache[key];
-  if (hit && Date.now() - hit.at < LB_TTL_MS) return hit.entries;
+  if (hit && Date.now() - hit.at < LB_TTL_MS) return hit;
   return null;
 }
-function lbStore(period, unit, entries) {
-  const key = `${period}:${unit}`;
-  lbCache[key] = { at: Date.now(), entries };
-  // Keep the tiny cache bounded.
+function lbStore(period, unit, offset, limit, entries, totalCount) {
+  const key = `${period}:${unit}:${offset}:${limit}`;
+  lbCache[key] = { at: Date.now(), entries, totalCount };
   const keys = Object.keys(lbCache);
   if (keys.length > 20) delete lbCache[keys[0]];
 }
@@ -276,18 +275,34 @@ router.get(
   asyncHandler(async (req, res) => {
     const period = req.query.period === 'all' ? 'all' : 'week';
     const unit = req.query.unit === 'sessions' ? 'sessions' : 'km';
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 50);
     const weekStart = startOfWeek(todayISO());
     const challenge = await getActiveChallenge();
-    if (!challenge) return res.json({ entries: [], viewer: null });
+    if (!challenge) return res.json({ entries: [], totalCount: 0, viewer: null });
 
     const unitTypes = activityTypesForUnit(unit);
 
-    let entries = lbCached(period, unit);
-    if (!entries) {
-      // Upper triangle: RANK() OVER (...) for correct ties, grouped by the user's
-      // PRIMARY KEY ONLY — name/photo are functionally dependent on users.id, so
-      // this stays valid under only_full_group_by while avoiding the old group-by
-      // (name/photo/activity_type) that could split one member into several rows.
+    const cached = lbCached(period, unit, offset, limit);
+    let entries;
+    let totalCount;
+
+    if (cached) {
+      entries = cached.entries;
+      totalCount = cached.totalCount;
+    } else {
+      const countRow = await db('challenge_activities')
+        .join('enrollments', 'enrollments.id', 'challenge_activities.enrollment_id')
+        .where('enrollments.challenge_id', challenge.id)
+        .whereIn('enrollments.status', ['committed', 'active'])
+        .whereIn('enrollments.activity_type', unitTypes)
+        .modify((q) => {
+          if (period === 'week') q.where('challenge_activities.date', '>=', weekStart);
+        })
+        .countDistinct({ c: 'enrollments.user_id' })
+        .first();
+      totalCount = Number(countRow?.c) || 0;
+
       const rows = await db('challenge_activities')
         .join('enrollments', 'enrollments.id', 'challenge_activities.enrollment_id')
         .join('users', 'users.id', 'enrollments.user_id')
@@ -302,7 +317,8 @@ router.get(
         .sum({ total: 'challenge_activities.quantity' })
         .select(db.raw('RANK() OVER (ORDER BY SUM(challenge_activities.quantity) DESC) AS rnk'))
         .orderByRaw('rnk ASC, users.id ASC')
-        .limit(10);
+        .limit(limit)
+        .offset(offset);
       entries = rows.map((r) => ({
         id: r.user_id,
         name: r.name,
@@ -312,11 +328,9 @@ router.get(
         rank: Number(r.rnk),
         isMe: r.user_id === req.user.id
       }));
-      lbStore(period, unit, entries);
+      lbStore(period, unit, offset, limit, entries, totalCount);
     }
 
-    // Live rank for the viewer (not cached — it's per-user). Uses dense-style
-    // counting on the same grouped data so it stays correct outside the top 10.
     const me = await db('challenge_activities')
       .join('enrollments', 'enrollments.id', 'challenge_activities.enrollment_id')
       .where({ 'enrollments.user_id': req.user.id, 'enrollments.challenge_id': challenge.id })
@@ -356,14 +370,14 @@ router.get(
         .having(db.raw('SUM(challenge_activities.quantity) = ?', [myTotal]))
         .count({ c: 'enrollments.user_id' })
         .first();
-      // Dense rank = number who beat us + 1; people tied with us share it.
-      viewerRank = (Number(before.c) || 0) + 1;
-      viewerCount = (Number(before.c) || 0) + (Number(ties.c) || 0);
+      viewerRank = (Number(before?.c) || 0) + 1;
+      viewerCount = (Number(before?.c) || 0) + (Number(ties?.c) || 0);
     }
 
     res.set('Cache-Control', 'private, max-age=15');
     res.json({
       entries,
+      totalCount,
       unit,
       viewer: viewerRank ? { rank: viewerRank, total: viewerCount } : { rank: null, total: viewerCount }
     });

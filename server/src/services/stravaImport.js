@@ -110,10 +110,11 @@ async function importStravaActivity(enrollment, activity, objectId, challenge) {
   const existing = await db('challenge_activities').where({ strava_activity_id: objectId }).first();
   if (existing) {
     await db('challenge_activities').where({ id: existing.id }).update(payload);
+    return { imported: false, reason: 'updated', type: appType, quantity: payload.quantity };
   } else {
     await db('challenge_activities').insert(payload);
+    return { imported: true, type: appType, quantity: payload.quantity };
   }
-  return { imported: true, type: appType, quantity: payload.quantity };
 }
 
 module.exports = { mapStravaType, acceptsStravaType, localDateOf, importStravaActivity };

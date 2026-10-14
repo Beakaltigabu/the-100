@@ -5,7 +5,7 @@ const stravaRateLimit = require('./stravaRateLimit');
 const { getActiveChallenge } = require('./challengeWindow');
 const { decrypt } = require('../lib/crypto');
 const { totalForEnrollment } = require('./progress');
-const { emitProgressEvents, sendActivityConfirm } = require('./progressEvents');
+const { emitProgressEvents } = require('./progressEvents');
 
 const PAGE_SIZE = 50;
 const MAX_SYNC_PAGES = 10;
@@ -134,11 +134,13 @@ async function syncStrava(userId, { after } = {}) {
 
     // Award milestones / complete the enrollment for everything just imported
     // (the webhook path already does this; the bulk/periodic path must too).
+    // NOTE: sendActivityConfirm is intentionally omitted here — the webhook (real-time)
+    // path sends confirmations. The poller/bulk sync is a safety-net only and should
+    // not duplicate DMs. Milestones/finishes are still announced via emitProgressEvents.
     if (imported > 0) {
       const totalValue = await totalForEnrollment(enrollment.id);
       const user = await db('users').where({ id: userId }).first();
       await emitProgressEvents({ enrollment, total: totalValue, user: user || { id: userId }, added: totalValue - totalBefore });
-      if (user) await sendActivityConfirm({ user, enrollment, added: totalValue - totalBefore, total: totalValue });
     }
 
     return { imported, total, rateLimited: false };
